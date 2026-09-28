@@ -12,6 +12,8 @@ Prerequisites: Node 20+ and Docker Desktop (running). The Supabase CLI is a dev 
 npm install
 npx supabase start          # local Postgres, Auth, Studio and a test inbox (first run downloads images)
 cp .env.example .env.local  # then fill in the two VITE_ values from `npx supabase status`
+echo "TMDB_READ_TOKEN=<your token>" > supabase/functions/.env   # see "Movie data" below
+npx supabase functions serve  # Edge Functions (keep running in its own terminal)
 npm run dev                 # http://localhost:5173
 ```
 
@@ -45,7 +47,17 @@ The dev server always uses port 5173, because Supabase Auth redirects back to ex
 | `SHOWTIMES_PROVIDER`, `SHOWTIMES_API_KEY` | Supabase secrets | Showtimes adapter (Phase 5) |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `..._SECRET` | `supabase/.env` | Only to test Google sign-in against the local stack |
 
-Only `VITE_` variables reach the browser. Everything else stays in Supabase. Never commit `.env.local` or `supabase/.env`.
+Only `VITE_` variables reach the browser. Everything else stays in Supabase. Locally, Edge Function secrets go in `supabase/functions/.env`. Never commit `.env.local`, `supabase/.env` or `supabase/functions/.env`.
+
+## Movie data (TMDB)
+
+All movie data comes from [TMDB](https://www.themoviedb.org) through the `tmdb` Edge Function (`supabase/functions/tmdb`), so the token never reaches the browser. It accepts only these operations: `search`, `movie`, `discover`, `now_playing`, `upcoming`, `genres`, `providers`. Only signed-in users can call it.
+
+Responses are cached in Postgres: movie details in `movies_cache` for 7 days, lists in `tmdb_list_cache` for 6 hours (genres and provider lists for 7 days). To force fresh data locally, run `npx supabase db reset` or delete rows from those tables in Studio.
+
+Get a token: create a free account at themoviedb.org, then go to Settings → API, request an API key (personal use is fine), and copy the **API Read Access Token** (the long one, not the short "API Key").
+
+The app shows the required TMDB attribution in the footer and the JustWatch attribution next to "Where to watch".
 
 ## Auth
 
@@ -73,7 +85,12 @@ A trigger creates a row in `public.profiles` for every new user (see `supabase/m
 4. **Authentication → Providers → Email**: keep "Confirm email" on and set the minimum password length to 8.
 5. **Authentication → Email Templates**: paste the contents of `supabase/templates/confirmation.html` ("Confirm signup"), `magic_link.html` ("Magic Link") and `recovery.html` ("Reset Password"). Without this the emails contain only a link, not the 6-digit code the app asks for.
 6. **Google sign-in**: in [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID (type "Web application") with the authorized redirect URI `https://<your-project-ref>.supabase.co/auth/v1/callback`. Paste the client ID and secret into **Authentication → Providers → Google** and enable it.
-7. **Before real users**: Supabase's built-in email sender is heavily rate-limited and meant for testing. Add your own SMTP (e.g. Resend, Postmark) in **Project Settings → Auth → SMTP**.
+7. **TMDB**: set the token as a secret and deploy the function:
+   ```bash
+   npx supabase secrets set TMDB_READ_TOKEN=<your token>
+   npx supabase functions deploy tmdb
+   ```
+8. **Before real users**: Supabase's built-in email sender is heavily rate-limited and meant for testing. Add your own SMTP (e.g. Resend, Postmark) in **Project Settings → Auth → SMTP**.
 
 ---
 

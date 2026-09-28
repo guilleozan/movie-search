@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
-import { Clapperboard, Bookmark, Compass, Ticket, LogOut } from 'lucide-react';
+import { Clapperboard, Bookmark, Compass, Ticket, LogOut, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
+import Footer from '@/components/Footer';
+import SearchDialog from '@/features/movies/SearchDialog';
 
 const navItems = [
   { to: '/', label: 'Discover', icon: Compass, end: true },
@@ -15,6 +17,20 @@ export default function Layout() {
   const { user, signOut } = useAuth();
   const { data: profile } = useProfile();
   const navigate = useNavigate();
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // "/" or Cmd/Ctrl+K opens search, unless the user is typing in a field.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
+      if ((e.key === '/' && !typing) || (e.key === 'k' && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const displayName = profile?.display_name || user?.email || '';
 
@@ -33,7 +49,15 @@ export default function Layout() {
           </span>
           <span className="font-display text-lg font-semibold tracking-tight">CineMatch</span>
         </Link>
-        <nav className="flex flex-col gap-1 px-3 mt-2" aria-label="Main">
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="mx-3 flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400 transition-colors hover:border-white/20 hover:text-slate-200"
+        >
+          <Search className="h-4 w-4" aria-hidden="true" />
+          <span className="flex-1 text-left">Search movies</span>
+          <kbd className="rounded border border-white/10 px-1.5 text-[10px] text-slate-500">/</kbd>
+        </button>
+        <nav className="flex flex-col gap-1 px-3 mt-3" aria-label="Main">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -78,7 +102,14 @@ export default function Layout() {
           </span>
           <span className="font-display text-base font-semibold tracking-tight">CineMatch</span>
         </Link>
-        <nav className="flex items-center gap-1" aria-label="Main">
+        <nav className="flex items-center gap-0.5 sm:gap-1" aria-label="Main">
+          <button
+            onClick={() => setSearchOpen(true)}
+            aria-label="Search movies"
+            className="rounded-lg p-2 text-slate-400 transition-colors hover:text-slate-100"
+          >
+            <Search className="h-4 w-4" aria-hidden="true" />
+          </button>
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -106,9 +137,12 @@ export default function Layout() {
         </nav>
       </div>
 
-      <main className="flex-1 min-w-0 pt-14 md:pt-0">
+      <main className="flex min-h-screen flex-1 min-w-0 flex-col pt-14 md:pt-0">
         <Outlet />
+        <Footer />
       </main>
+
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

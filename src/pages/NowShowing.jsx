@@ -1,14 +1,21 @@
 import React from 'react';
-import { Clapperboard } from 'lucide-react';
-import ComingSoon from '@/components/ComingSoon';
+import { motion } from 'framer-motion';
+import { Clapperboard, CalendarClock, RefreshCw } from 'lucide-react';
+import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
+import { countryName } from '@/lib/tmdb';
+import { useCountry, useReleaseList } from '@/features/movies/hooks';
 
-// Rebuilt on TMDB now_playing / upcoming for the user's region in Phases 2 and 5.
+// TMDB now_playing / upcoming for the user's country. Showtimes arrive in Phase 5.
 export default function NowShowing() {
+  const country = useCountry();
+  const nowPlaying = useReleaseList('now_playing', country);
+  const upcoming = useReleaseList('upcoming', country);
+
   return (
-    <div className="px-5 sm:px-8 lg:px-12 py-10 sm:py-14 max-w-6xl mx-auto">
+    <div className="px-5 sm:px-8 lg:px-12 py-10 sm:py-14 max-w-6xl mx-auto w-full">
       <div className="mb-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-300">
-          <Clapperboard className="h-3.5 w-3.5" aria-hidden="true" /> Now showing
+          <Clapperboard className="h-3.5 w-3.5" aria-hidden="true" /> Now showing in {countryName(country)}
         </div>
         <h1 className="mt-4 font-display text-3xl sm:text-4xl font-semibold tracking-tight text-white">
           In cinemas & coming soon
@@ -17,9 +24,57 @@ export default function NowShowing() {
           What's playing right now and what's headed to the big screen. Bookmark anything you want to catch.
         </p>
       </div>
-      <ComingSoon icon={Clapperboard} title="Showtimes are coming soon">
-        We're connecting real cinema listings for your area.
-      </ComingSoon>
+
+      <Section id="now-playing" icon={Clapperboard} title="In theaters now" query={nowPlaying} emptyText="No films listed as playing right now." />
+      <div className="mt-12">
+        <Section id="upcoming" icon={CalendarClock} title="Coming soon" query={upcoming} emptyText="No upcoming releases listed yet." />
+      </div>
     </div>
+  );
+}
+
+function Section({ id, icon: Icon, title, query, emptyText }) {
+  const movies = query.data?.results ?? [];
+
+  return (
+    <section aria-labelledby={id}>
+      <div className="mb-4 flex items-center gap-2">
+        <Icon className="h-5 w-5 text-amber-400" aria-hidden="true" />
+        <h2 id={id} className="font-display text-xl font-semibold text-white">{title}</h2>
+        {query.isSuccess && movies.length > 0 && (
+          <span className="text-sm text-slate-500">· {movies.length} films</span>
+        )}
+      </div>
+
+      {query.isPending && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-busy="true" aria-label={`Loading ${title}`}>
+          {Array.from({ length: 10 }, (_, i) => <MovieCardSkeleton key={i} />)}
+        </div>
+      )}
+
+      {query.isError && (
+        <div className="rounded-2xl border border-white/5 bg-white/[0.03] py-10 text-center">
+          <p className="text-rose-300">{query.error.message}</p>
+          <button onClick={() => query.refetch()} className="mt-3 inline-flex items-center gap-1.5 text-sm text-amber-300 hover:underline">
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Try again
+          </button>
+        </div>
+      )}
+
+      {query.isSuccess && movies.length === 0 && <p className="text-sm text-slate-500">{emptyText}</p>}
+
+      {movies.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        >
+          {movies.map((m, i) => (
+            <MovieCard key={m.id} movie={m} index={i} />
+          ))}
+        </motion.div>
+      )}
+    </section>
   );
 }
