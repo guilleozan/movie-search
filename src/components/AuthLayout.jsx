@@ -1,5 +1,15 @@
 import React from "react";
 
+/**
+ * Centred card used by every auth page.
+ *
+ * @param {Object} props
+ * @param {React.ElementType} props.icon
+ * @param {string} props.title
+ * @param {string} [props.subtitle]
+ * @param {React.ReactNode} [props.footer]
+ * @param {React.ReactNode} [props.children]
+ */
 export default function AuthLayout({ icon: Icon, title, subtitle, footer, children }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">

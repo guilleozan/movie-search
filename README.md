@@ -1,72 +1,81 @@
-# Base44 Project
+# CineMatch
 
-Use this repository to run and edit the app locally, then publish changes back through Base44.
+Movie recommendations, watchlist and local showtimes. React + Vite + Supabase.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+The rebuild plan (phases, data model, rules) is in [the brief below](#cinematch-v2-rebuild-brief). The audit of the original Base44 app is in [docs/AUDIT.md](docs/AUDIT.md).
 
-## Prerequisites
+## Run locally
 
-1. Clone the repository using the project's Git URL.
-2. Navigate to the project directory.
-3. Install dependencies: `npm install`.
-4. Install the Base44 CLI: `npm install -g base44@latest`.
-5. Install [Deno](https://docs.deno.com/runtime/getting_started/installation/) — the local Base44 backend runs on it.
-
-Run `base44 --help` (or see the [CLI reference](https://docs.base44.com/developers/references/cli/commands/introduction)) for the full command surface.
-
-## Run Locally
-
-Three commands, from the project root:
+Prerequisites: Node 20+ and Docker Desktop (running). The Supabase CLI is a dev dependency, so use it through `npx supabase`.
 
 ```bash
-base44 login   # one-time per machine
-base44 link    # one-time per clone
-base44 dev     # local backend + frontend together
+npm install
+npx supabase start          # local Postgres, Auth, Studio and a test inbox (first run downloads images)
+cp .env.example .env.local  # then fill in the two VITE_ values from `npx supabase status`
+npm run dev                 # http://localhost:5173
 ```
 
-Open the frontend URL that `base44 dev` prints (typically `http://localhost:5173`).
+Local services:
 
-Notes:
+| What | URL |
+|---|---|
+| App | http://localhost:5173 |
+| Supabase Studio (tables, users) | http://127.0.0.1:54323 |
+| Mailpit (every email the app sends: codes, magic links, resets) | http://127.0.0.1:54324 |
 
-- **Every fresh clone needs `base44 link`.** It writes `base44/.app.jsonc` (the app-id pointer), which is deliberately gitignored. Your app id is in the Builder URL (`app.base44.com/apps/<id>/...`); `base44 link --help` shows the non-interactive flags.
-- **`base44 dev` runs the frontend for you** (via `site.serveCommand` in this repo's `base44/config.jsonc`) — never run `npm run dev` yourself: alone it serves a UI with no backend behind it (`[base44] Proxy not enabled`, every `/api` call fails), and alongside `base44 dev` the second Vite silently takes the next port and you end up looking at the wrong one.
-- **The app must be published at least once for the UI to load under `base44 dev`.** The frontend boots by fetching app settings from the hosted app; before the first publish that fails and every page redirects to login. The local API works regardless.
-- Entities, functions, and auth run locally — entity data is **in-memory only**, wiped when `base44 dev` restarts. Everything else (Core integrations, OAuth login) is forwarded to your deployed app. Full breakdown: [Local development overview](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview).
-
-## Frontend Only, Hosted Backend
-
-To work on just the frontend against your app's live hosted backend:
+Other commands:
 
 ```bash
-base44 dev --remote
+npm run lint                # ESLint
+npm run build               # production build into dist/
+npx supabase db reset       # wipe the local database and re-run all migrations
+npx supabase stop           # stop the local stack
 ```
 
-⚠️ In this mode writes go to your app's **production data** — plain `base44 dev` keeps everything local.
+The dev server always uses port 5173, because Supabase Auth redirects back to exactly that address.
 
-## Publish Your Changes
+## Environment variables
 
-After pushing your changes to git, open the Base44 dashboard and publish the app:
+| Name | Where | What |
+|---|---|---|
+| `VITE_SUPABASE_URL` | `.env.local` / hosting env | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | `.env.local` / hosting env | Supabase anon (public) key. Safe in the browser; RLS protects the data |
+| `TMDB_READ_TOKEN` | Supabase secret | TMDB v4 read token (Phase 2) |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` | Supabase secrets | Recommendation reranker (Phase 4) |
+| `SHOWTIMES_PROVIDER`, `SHOWTIMES_API_KEY` | Supabase secrets | Showtimes adapter (Phase 5) |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `..._SECRET` | `supabase/.env` | Only to test Google sign-in against the local stack |
 
-```bash
-base44 dashboard open
-```
+Only `VITE_` variables reach the browser. Everything else stays in Supabase. Never commit `.env.local` or `supabase/.env`.
 
-This repo syncs to Base44 through git, so publish from the dashboard rather than `base44 deploy` — a CLI deploy ships your local tree directly, bypassing the sync, and the deployed state silently diverges from the repo.
+## Auth
 
-## Docs & Support
+Supabase Auth with:
 
-GitHub integration: [https://docs.base44.com/developers/app-code/local-development/github](https://docs.base44.com/developers/app-code/local-development/github)
+- email + password (sign up confirms the email with a 6-digit code or the link in the same email)
+- passwordless sign in with an emailed code or magic link (`/login/code`)
+- Google OAuth
+- password reset by email link (`/forgot-password` → `/reset-password`)
 
-Local development: [https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview](https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview)
+Signed-out users who open a protected page are sent to `/login?returnTo=...` and come back to that page after signing in. OAuth and email links land on `/auth/callback`, which finishes the sign in and follows `returnTo`.
 
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+A trigger creates a row in `public.profiles` for every new user (see `supabase/migrations/`).
 
+## Set up the hosted Supabase project
 
+1. Create a project at [supabase.com](https://supabase.com). Copy the **Project URL** and **anon key** from Project Settings → API into `.env.local` (and later into your hosting provider).
+2. Link this repo and apply the migrations:
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref <your-project-ref>
+   npx supabase db push
+   ```
+3. **Authentication → URL Configuration**: set **Site URL** to your production URL (use `http://localhost:5173` until you deploy) and add these **Redirect URLs**: `http://localhost:5173/**` and `https://<your-production-domain>/**`.
+4. **Authentication → Providers → Email**: keep "Confirm email" on and set the minimum password length to 8.
+5. **Authentication → Email Templates**: paste the contents of `supabase/templates/confirmation.html` ("Confirm signup"), `magic_link.html` ("Magic Link") and `recovery.html` ("Reset Password"). Without this the emails contain only a link, not the 6-digit code the app asks for.
+6. **Google sign-in**: in [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID (type "Web application") with the authorized redirect URI `https://<your-project-ref>.supabase.co/auth/v1/callback`. Paste the client ID and secret into **Authentication → Providers → Google** and enable it.
+7. **Before real users**: Supabase's built-in email sender is heavily rate-limited and meant for testing. Add your own SMTP (e.g. Resend, Postmark) in **Project Settings → Auth → SMTP**.
 
-
-
-
-
+---
 
 # CineMatch v2: Rebuild Brief
 

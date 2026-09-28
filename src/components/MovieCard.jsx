@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Bookmark, BookmarkCheck, Star, Clock, Film } from 'lucide-react';
+import { Bookmark, BookmarkCheck, Star, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function MovieCard({ movie, index = 0, saved, onToggleSave }) {
