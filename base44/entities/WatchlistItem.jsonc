@@ -1,0 +1,73 @@
+{
+  "name": "WatchlistItem",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "year": {
+      "type": "string"
+    },
+    "genre": {
+      "type": "string"
+    },
+    "director": {
+      "type": "string"
+    },
+    "runtime": {
+      "type": "string"
+    },
+    "rating": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "tagline": {
+      "type": "string"
+    },
+    "release_status": {
+      "type": "string",
+      "enum": [
+        "Released",
+        "In theaters",
+        "Upcoming"
+      ],
+      "default": "Released"
+    },
+    "release_date": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "unwatched",
+        "watched"
+      ],
+      "default": "unwatched"
+    },
+    "user_rating": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "created_by_id": "{{user.id}}"
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "created_by_id": "{{user.id}}"
+    },
+    "delete": {
+      "created_by_id": "{{user.id}}"
+    }
+  }
+}
