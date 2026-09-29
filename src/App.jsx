@@ -20,6 +20,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import AuthCallback from '@/pages/AuthCallback';
 import MovieDetailPage from '@/features/movies/MovieDetailPage';
+import ProfilePage from '@/features/profile/ProfilePage';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
                   <Route path="/now-showing" element={<NowShowing />} />
                   <Route path="/watchlist" element={<WatchlistPage />} />
                   <Route path="/movie/:tmdbId" element={<MovieDetailPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>
 

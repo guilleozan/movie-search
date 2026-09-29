@@ -1,5 +1,4 @@
-import { FunctionsHttpError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { invokeFunction } from '@/lib/edge-functions';
 
 /**
  * @typedef {Object} MovieSummary
@@ -39,24 +38,8 @@ import { supabase } from '@/lib/supabase';
  * @param {'search'|'movie'|'discover'|'now_playing'|'upcoming'|'genres'|'providers'} op
  * @param {Record<string, unknown>} [params]
  */
-export async function callTmdb(op, params = {}) {
-  const { data, error } = await supabase.functions.invoke('tmdb', { body: { op, params } });
-  if (error) {
-    let message = 'Movie data is unavailable right now';
-    let status;
-    if (error instanceof FunctionsHttpError) {
-      status = error.context.status;
-      try {
-        message = (await error.context.json()).error || message;
-      } catch {
-        // keep the default message
-      }
-    }
-    const err = new Error(message);
-    err.status = status;
-    throw err;
-  }
-  return data;
+export function callTmdb(op, params = {}) {
+  return invokeFunction('tmdb', { op, params }, 'Movie data is unavailable right now');
 }
 
 /** @param {string | null | undefined} date */

@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, CalendarClock, Eye, Pencil, RefreshCw, X } from 'lucide-react';
+import { Bookmark, CalendarClock, Eye, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
+import ErrorBox from '@/components/ErrorBox';
 import { useCountry, useMovies } from '@/features/movies/hooks';
 import { countryName, formatReleaseDate, providersFor, regionalReleaseDate, todayISO } from '@/lib/tmdb';
 import { REACTIONS, useWatchlist } from '@/features/watchlist/hooks';
@@ -270,17 +271,6 @@ function GridSkeleton({ count = 10 }) {
     <Grid>
       {Array.from({ length: count }, (_, i) => <MovieCardSkeleton key={i} />)}
     </Grid>
-  );
-}
-
-function ErrorBox({ message, onRetry }) {
-  return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.03] py-10 text-center">
-      <p className="text-rose-300">{message}</p>
-      <button onClick={onRetry} className="mt-3 inline-flex items-center gap-1.5 text-sm text-amber-300 hover:underline">
-        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Try again
-      </button>
-    </div>
   );
 }
 

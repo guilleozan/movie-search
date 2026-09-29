@@ -43,7 +43,7 @@ The dev server always uses port 5173, because Supabase Auth redirects back to ex
 | `VITE_SUPABASE_URL` | `.env.local` / hosting env | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | `.env.local` / hosting env | Supabase anon (public) key. Safe in the browser; RLS protects the data |
 | `TMDB_READ_TOKEN` | Supabase secret | TMDB v4 read token (Phase 2) |
-| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` | Supabase secrets | Recommendation reranker (Phase 4) |
+| `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` | Supabase secrets | Recommendation reranker (optional, see [Recommendations](#recommendations)) |
 | `SHOWTIMES_PROVIDER`, `SHOWTIMES_API_KEY` | Supabase secrets | Showtimes adapter (Phase 5) |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `..._SECRET` | `supabase/.env` | Only to test Google sign-in against the local stack |
 
@@ -87,6 +87,25 @@ node scripts/import-base44-watchlist.js --file watchlist.csv --user-email you@ex
 
 A row is imported only when exactly one TMDB movie has the same title and year. Everything else is written to `watchlist.csv.unmatched.csv` with the reason, so you can fix those rows and re-run.
 
+## Recommendations
+
+Discover (`/`) runs the taste quiz once, then shows picks from the `recommend` Edge Function. Answers are saved in `quiz_answers` and can be edited on `/profile`.
+
+How a set of picks is made (`supabase/functions/recommend/`):
+
+1. **Taste profile** (`taste.ts`): genre weights from the quiz, the mood, ratings and reactions ("loved it" / "not for me") and the watchlist, plus liked and disliked films. Saved to `taste_profiles`.
+2. **Candidates**, all from TMDB: `recommendations` and `similar` of the films they liked most, `discover` on their top genres and era, `now_playing` in their country for "In cinemas", or the seed movie's recommendations for "More like this". Anything in their watchlist, dismissed ("Not interested") or picked as a quiz favourite is removed.
+3. **Ranking**: with an LLM configured, it picks the best 12 from the candidates and writes the "why" line. Any ID that isn't a candidate is dropped, so it can't invent films. Without an LLM, or if the call fails, a scoring formula ranks them and fills in template reasons ("Because you liked Parasite."). The response says which one ran (`ranked_by`).
+4. **Cache**: sets are kept in `recommendation_sets` for 6 hours per occasion. A new quiz, rating or country skips the cache; "New picks" forces a fresh set (limited to 20 per user per hour).
+
+The LLM is optional. To turn it on, add to `supabase/functions/.env` (local) or `npx supabase secrets set` (hosted):
+
+```bash
+LLM_PROVIDER=anthropic   # anthropic | openai | gemini
+LLM_MODEL=claude-opus-5  # any model id from that provider
+LLM_API_KEY=<key>
+```
+
 ## Set up the hosted Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com). Copy the **Project URL** and **anon key** from Project Settings → API into `.env.local` (and later into your hosting provider).
@@ -100,10 +119,13 @@ A row is imported only when exactly one TMDB movie has the same title and year. 
 4. **Authentication → Providers → Email**: keep "Confirm email" on and set the minimum password length to 8.
 5. **Authentication → Email Templates**: paste the contents of `supabase/templates/confirmation.html` ("Confirm signup"), `magic_link.html` ("Magic Link") and `recovery.html` ("Reset Password"). Without this the emails contain only a link, not the 6-digit code the app asks for.
 6. **Google sign-in**: in [Google Cloud Console](https://console.cloud.google.com/apis/credentials), create an OAuth client ID (type "Web application") with the authorized redirect URI `https://<your-project-ref>.supabase.co/auth/v1/callback`. Paste the client ID and secret into **Authentication → Providers → Google** and enable it.
-7. **TMDB**: set the token as a secret and deploy the function:
+7. **TMDB and recommendations**: set the token as a secret and deploy the functions:
    ```bash
    npx supabase secrets set TMDB_READ_TOKEN=<your token>
    npx supabase functions deploy tmdb
+   npx supabase functions deploy recommend
+   # optional, for LLM-written picks (see "Recommendations"):
+   npx supabase secrets set LLM_PROVIDER=anthropic LLM_MODEL=claude-opus-5 LLM_API_KEY=<key>
    ```
 8. **Before real users**: Supabase's built-in email sender is heavily rate-limited and meant for testing. Add your own SMTP (e.g. Resend, Postmark) in **Project Settings → Auth → SMTP**.
 

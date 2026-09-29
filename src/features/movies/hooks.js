@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { callTmdb } from '@/lib/tmdb';
+import { retryServerErrors } from '@/lib/edge-functions';
 import { useProfile } from '@/hooks/use-profile';
 
 const HOUR = 60 * 60 * 1000;
@@ -9,9 +10,6 @@ export function useCountry() {
   const { data: profile } = useProfile();
   return profile?.country_code ?? 'NZ';
 }
-
-// Don't retry "not found" or bad requests, only server/network failures.
-const retryServerErrors = (count, error) => !(error?.status < 500) && count < 1;
 
 /**
  * Movie details with watch providers and certifications for `country` only.

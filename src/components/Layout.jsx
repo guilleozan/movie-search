@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
-import { Clapperboard, Bookmark, Compass, Ticket, LogOut, Search } from 'lucide-react';
+import { Clapperboard, Bookmark, Compass, Ticket, LogOut, Search, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
@@ -78,15 +78,23 @@ export default function Layout() {
           ))}
         </nav>
         <div className="mt-auto border-t border-white/5 px-3 py-4">
-          <div className="flex items-center gap-3 px-3">
+          <NavLink
+            to="/profile"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 transition-colors',
+                isActive ? 'bg-white/10' : 'hover:bg-white/5'
+              )
+            }
+          >
             <Avatar name={displayName} url={profile?.avatar_url} />
             <span className="min-w-0 flex-1 truncate text-sm text-slate-300" title={displayName}>
               {displayName}
             </span>
-          </div>
+          </NavLink>
           <button
             onClick={handleSignOut}
-            className="mt-3 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100"
+            className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100"
           >
             <LogOut className="h-[18px] w-[18px]" aria-hidden="true" />
             Sign out
@@ -127,13 +135,16 @@ export default function Layout() {
               <span className="hidden sm:inline">{item.label}</span>
             </NavLink>
           ))}
-          <button
-            onClick={handleSignOut}
-            aria-label="Sign out"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:text-slate-100"
+          {/* Sign out lives on the profile page on mobile, to keep the bar at 375px. */}
+          <NavLink
+            to="/profile"
+            aria-label="Profile"
+            className={({ isActive }) =>
+              cn('rounded-lg p-2 transition-colors', isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-100')
+            }
           >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-          </button>
+            <UserRound className="h-4 w-4" aria-hidden="true" />
+          </NavLink>
         </nav>
       </div>
 
