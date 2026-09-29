@@ -11,7 +11,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import GuestRoute from '@/components/GuestRoute';
 import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
-import Watchlist from '@/pages/Watchlist';
+import WatchlistPage from '@/features/watchlist/WatchlistPage';
 import NowShowing from '@/pages/NowShowing';
 import Login from '@/pages/Login';
 import EmailCodeLogin from '@/pages/EmailCodeLogin';
@@ -46,7 +46,7 @@ function App() {
                 <Route element={<Layout />}>
                   <Route path="/" element={<Home />} />
                   <Route path="/now-showing" element={<NowShowing />} />
-                  <Route path="/watchlist" element={<Watchlist />} />
+                  <Route path="/watchlist" element={<WatchlistPage />} />
                   <Route path="/movie/:tmdbId" element={<MovieDetailPage />} />
                 </Route>
               </Route>

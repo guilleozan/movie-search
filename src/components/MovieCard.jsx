@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bookmark, BookmarkCheck, Star, Film } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Star, Film } from 'lucide-react';
 import { tmdbImage, posterSrcSet } from '@/lib/tmdb-images';
 import { formatRuntime, releaseYear } from '@/lib/tmdb';
+import WatchlistButton from '@/features/watchlist/WatchlistButton';
 
 // Matches the grids that use this card (2 / 3 / 4 / 5 columns).
 const GRID_SIZES = '(min-width: 1280px) 200px, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw';
@@ -16,10 +16,10 @@ const GRID_SIZES = '(min-width: 1280px) 200px, (min-width: 1024px) 25vw, (min-wi
  * @param {import('@/lib/tmdb').MovieSummary & { reason?: string }} props.movie
  * @param {number} [props.index] position in the grid, for the staggered entrance
  * @param {string} [props.sizes] `sizes` for the poster srcset
- * @param {boolean} [props.saved]
- * @param {(movie: object) => void} [props.onToggleSave] shows the bookmark button when set
+ * @param {boolean} [props.showSave] show the watchlist bookmark (default true)
+ * @param {React.ReactNode} [props.children] extra controls under the card, e.g. on the watchlist page
  */
-export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, saved, onToggleSave }) {
+export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, showSave = true, children }) {
   const year = releaseYear(movie.release_date);
   const runtime = formatRuntime(movie.runtime);
   const genres = movie.genres?.slice(0, 2).map((g) => g.name).join(' · ');
@@ -70,21 +70,9 @@ export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, saved,
         </div>
       </Link>
 
-      {onToggleSave && (
-        <button
-          onClick={() => onToggleSave(movie)}
-          aria-label={saved ? `Remove ${movie.title} from watchlist` : `Add ${movie.title} to watchlist`}
-          aria-pressed={!!saved}
-          className={cn(
-            'absolute right-2 top-2 rounded-full p-2 backdrop-blur transition-colors',
-            saved
-              ? 'bg-amber-400 text-slate-950'
-              : 'bg-slate-950/70 text-slate-200 hover:bg-slate-950 hover:text-white'
-          )}
-        >
-          {saved ? <BookmarkCheck className="h-4 w-4" aria-hidden="true" /> : <Bookmark className="h-4 w-4" aria-hidden="true" />}
-        </button>
-      )}
+      {children && <div className="px-3 pb-3">{children}</div>}
+
+      {showSave && <WatchlistButton movie={movie} className="absolute right-2 top-2" />}
     </motion.div>
   );
 }

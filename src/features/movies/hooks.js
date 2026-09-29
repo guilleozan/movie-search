@@ -50,3 +50,27 @@ export function useReleaseList(kind, region) {
     retry: retryServerErrors,
   });
 }
+
+/**
+ * Summaries (with providers and release dates for `country`) for many movies,
+ * fetched in batches of 50. Results keep the order of `ids`.
+ *
+ * @param {number[]} ids
+ * @param {string} country
+ */
+export function useMovies(ids, country) {
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  return useQuery({
+    queryKey: ['tmdb', 'movies', sorted, country],
+    enabled: sorted.length > 0,
+    staleTime: HOUR,
+    placeholderData: keepPreviousData,
+    retry: retryServerErrors,
+    queryFn: async () => {
+      const batches = [];
+      for (let i = 0; i < sorted.length; i += 50) batches.push(sorted.slice(i, i + 50));
+      const pages = await Promise.all(batches.map((batch) => callTmdb('movie', { ids: batch, region: country })));
+      return new Map(pages.flatMap((p) => p.results).map((m) => [m.id, m]));
+    },
+  });
+}

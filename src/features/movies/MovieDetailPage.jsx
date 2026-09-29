@@ -7,6 +7,7 @@ import { certificationFor, formatRuntime, pickTrailer, releaseYear } from '@/lib
 import { useCountry, useMovie } from '@/features/movies/hooks';
 import TrailerModal from '@/features/movies/TrailerModal';
 import WatchProviders from '@/features/movies/WatchProviders';
+import WatchlistActions from '@/features/watchlist/WatchlistActions';
 
 // Horizontal "More like this" row: cards are a fixed ~160px wide.
 const ROW_CARD_SIZES = '160px';
@@ -109,8 +110,11 @@ export default function MovieDetailPage() {
                 ))}
               </ul>
             )}
+            <div className="mt-5">
+              <WatchlistActions movie={movie} />
+            </div>
             {trailer && (
-              <div className="mt-5 flex flex-wrap items-center gap-4">
+              <div className="mt-4 flex flex-wrap items-center gap-4">
                 <button
                   onClick={() => setTrailerOpen(true)}
                   className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300"

@@ -124,3 +124,31 @@ export function countryName(code) {
     return code;
   }
 }
+
+/**
+ * Release date in a country, YYYY-MM-DD: the earliest theatrical release there
+ * (TMDB types 2 limited, 3 theatrical), else the earliest of any type, else the
+ * movie's primary release date.
+ *
+ * @param {{ release_date: string | null, release_dates?: MovieDetails['release_dates'] }} movie
+ * @param {string} country
+ */
+export function regionalReleaseDate(movie, country) {
+  const entries = movie.release_dates?.[country] ?? [];
+  const earliest = (list) => list.map((r) => r.release_date.slice(0, 10)).sort()[0];
+  return earliest(entries.filter((r) => r.type === 2 || r.type === 3)) ?? earliest(entries) ?? movie.release_date ?? null;
+}
+
+/** Today as YYYY-MM-DD in the viewer's time zone, for comparing with release dates. */
+export function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** "2026-10-07" -> "7 Oct" (or "7 Oct 2027" when not this year). */
+export function formatReleaseDate(isoDate) {
+  if (!isoDate) return '';
+  const date = new Date(`${isoDate}T00:00:00`);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+}

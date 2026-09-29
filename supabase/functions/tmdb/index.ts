@@ -43,9 +43,25 @@ const OPERATIONS: Record<string, (params: Params) => Promise<unknown>> = {
     });
   },
 
+  // { id } -> full details. { ids: [...] } (max 50) -> { results } with summaries plus
+  // providers and release dates, for lists like the watchlist; unknown ids are skipped.
   movie: async (p) => {
-    const id = int(p.id, 'id', 1, 1e9);
     const country = region(p.region);
+
+    if (p.ids !== undefined) {
+      if (!Array.isArray(p.ids) || p.ids.length > 50) throw new HttpError(400, 'Invalid ids');
+      const ids = [...new Set(p.ids.map((id) => int(id, 'ids', 1, 1e9)))];
+      const found = ids.length ? await getDetails(ids) : [];
+      return {
+        results: found.filter(Boolean).map((d) => ({
+          ...toSummary(d!),
+          watch_providers: pickCountry(d!.watch_providers, country),
+          release_dates: pickCountry(d!.release_dates, country),
+        })),
+      };
+    }
+
+    const id = int(p.id, 'id', 1, 1e9);
     const [details] = await getDetails([id]);
     if (!details) throw new HttpError(404, 'Movie not found');
     // The cache keeps every country; send only the user's to keep the payload small.

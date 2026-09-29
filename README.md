@@ -72,6 +72,21 @@ Signed-out users who open a protected page are sent to `/login?returnTo=...` and
 
 A trigger creates a row in `public.profiles` for every new user (see `supabase/migrations/`).
 
+## Watchlist
+
+Stored in `watchlist_items` (one row per user and TMDB movie, RLS: each user sees only their own rows). A trigger sets `watched_at` when a movie is marked watched, and ratings/reactions are only allowed on watched movies.
+
+**Importing the old Base44 watchlist** (optional): export the `WatchlistItem` entity as CSV from Base44 (columns `title`, `year`, `status`, `user_rating`, `notes`, `created_date`), then:
+
+```bash
+export SUPABASE_URL=http://127.0.0.1:54321            # or https://<ref>.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=<service role key>   # `npx supabase status`, or Project Settings → API. Never commit it.
+node scripts/import-base44-watchlist.js --file watchlist.csv --user-email you@example.com --dry-run
+node scripts/import-base44-watchlist.js --file watchlist.csv --user-email you@example.com
+```
+
+A row is imported only when exactly one TMDB movie has the same title and year. Everything else is written to `watchlist.csv.unmatched.csv` with the reason, so you can fix those rows and re-run.
+
 ## Set up the hosted Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com). Copy the **Project URL** and **anon key** from Project Settings → API into `.env.local` (and later into your hosting provider).
