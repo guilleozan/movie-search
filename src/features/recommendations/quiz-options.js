@@ -41,4 +41,7 @@ export const CONTEXTS = [
   { id: 'short', label: 'Short (< 100 min)' },
 ];
 
+/** Occasions that apply to series (no cinemas, no "short"). */
+export const SERIES_CONTEXTS = new Set(['home', 'friends']);
+
 export const MAX_FAVORITES = 5;

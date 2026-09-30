@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import SearchResults, { useSearchResults } from '@/features/movies/SearchResults';
+import { titlePath } from '@/lib/tmdb';
 
 /**
  * Movie search across TMDB (desktop). Controlled by the Layout, which also opens it with "/".
@@ -14,10 +15,10 @@ export default function SearchDialog({ open, onOpenChange }) {
   const search = useSearchResults(query);
   const navigate = useNavigate();
 
-  const openMovie = (id) => {
+  const openMovie = (movie) => {
     onOpenChange(false);
     setQuery('');
-    navigate(`/movie/${id}`);
+    navigate(titlePath(movie));
   };
 
   return (
@@ -31,7 +32,7 @@ export default function SearchDialog({ open, onOpenChange }) {
           role="search"
           onSubmit={(e) => {
             e.preventDefault();
-            if (search.results[0]) openMovie(search.results[0].id);
+            if (search.results[0]) openMovie(search.results[0]);
           }}
           className="flex items-center gap-3 border-b border-white/10 px-4"
         >
@@ -41,7 +42,7 @@ export default function SearchDialog({ open, onOpenChange }) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search movies…"
+            placeholder="Search movies & series…"
             aria-label="Search movies"
             className="h-14 flex-1 bg-transparent pr-8 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none"
           />

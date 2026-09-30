@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Bookmark, BookmarkCheck, Eye, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { mediaOf } from '@/lib/tmdb';
 import { REACTIONS, useRemoveWatchlistItem, useSaveWatchlistItem, useWatchlistItem } from '@/features/watchlist/hooks';
 import { RatingStars } from '@/features/watchlist/RatingInput';
 import MarkWatchedDialog from '@/features/watchlist/MarkWatchedDialog';
 
 const pill = 'inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors';
 
-/** Watchlist controls for the movie detail page. */
+/** Watchlist controls for the movie / series detail page. */
 export default function WatchlistActions({ movie }) {
-  const item = useWatchlistItem(movie.id);
+  const media = mediaOf(movie);
+  const item = useWatchlistItem(movie.id, media);
   const save = useSaveWatchlistItem();
   const remove = useRemoveWatchlistItem();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -23,7 +25,7 @@ export default function WatchlistActions({ movie }) {
       <button
         type="button"
         aria-pressed={saved}
-        onClick={() => (saved ? remove.mutate({ tmdb_id: movie.id }) : save.mutate({ tmdb_id: movie.id }))}
+        onClick={() => (saved ? remove.mutate({ tmdb_id: movie.id, media_type: media }) : save.mutate({ tmdb_id: movie.id, media_type: media }))}
         className={cn(
           pill,
           saved ? 'border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20' : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/25'
@@ -44,7 +46,7 @@ export default function WatchlistActions({ movie }) {
 
       {watched && (
         <span className="inline-flex items-center gap-2 text-sm text-slate-300">
-          <span className="text-slate-500">Watched</span>
+          <span className="text-slate-500">Watched{item.watched_on ? ` on ${item.watched_on}` : ''}</span>
           <RatingStars value={item.rating} />
           {reaction && <span>· {reaction}</span>}
         </span>

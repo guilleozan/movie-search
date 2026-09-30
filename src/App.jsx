@@ -21,6 +21,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import AuthCallback from '@/pages/AuthCallback';
 import MovieDetailPage from '@/features/movies/MovieDetailPage';
 import ProfilePage from '@/features/profile/ProfilePage';
+import SeenPage from '@/features/history/SeenPage';
 
 function App() {
   return (
@@ -49,6 +50,8 @@ function App() {
                   <Route path="/now-showing" element={<NowShowing />} />
                   <Route path="/watchlist" element={<WatchlistPage />} />
                   <Route path="/movie/:tmdbId" element={<MovieDetailPage />} />
+                  <Route path="/tv/:tmdbId" element={<MovieDetailPage key="tv" media="tv" />} />
+                  <Route path="/seen" element={<SeenPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>

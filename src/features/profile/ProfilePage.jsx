@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { LogOut, MapPin, Pencil } from 'lucide-react';
+import { History, LogOut, MapPin, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import ErrorBox from '@/components/ErrorBox';
@@ -13,6 +13,7 @@ import { useCountry, useMovies } from '@/features/movies/hooks';
 import LocationPicker from '@/features/cinemas/LocationPicker';
 import Quiz from '@/features/recommendations/Quiz';
 import TasteEditor from '@/features/recommendations/TasteEditor';
+import StreamingServices from '@/features/profile/StreamingServices';
 import { ERAS, GENRES, MOODS } from '@/features/recommendations/quiz-options';
 import { useQuizAnswers, useSaveQuizAnswers } from '@/features/recommendations/hooks';
 
@@ -45,8 +46,19 @@ export default function ProfilePage() {
         {/* Keyed by country so the form picks up a country set from the location. */}
         {profile.isSuccess && <DetailsForm key={profile.data.country_code} profile={profile.data} />}
         {profile.isSuccess && <LocationSection profile={profile.data} />}
+        {profile.isSuccess && <StreamingServices profile={profile.data} />}
 
         <TasteSection />
+
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-5 sm:p-6">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-white">What you've watched</h2>
+            <p className="mt-1 text-sm text-slate-400">Mark films and series you've seen, or import your Netflix history.</p>
+          </div>
+          <Link to="/seen" className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:border-white/20">
+            <History className="h-3.5 w-3.5" aria-hidden="true" /> Add what you've watched
+          </Link>
+        </section>
 
         <Button
           variant="ghost"

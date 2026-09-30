@@ -1,11 +1,13 @@
 import React from 'react';
 import { Bookmark, BookmarkCheck, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { mediaOf } from '@/lib/tmdb';
 import { useRemoveWatchlistItem, useSaveWatchlistItem, useWatchlistItem } from '@/features/watchlist/hooks';
 
 /** Bookmark toggle used on every movie card. Watched movies show an eye instead. */
 export default function WatchlistButton({ movie, className }) {
-  const item = useWatchlistItem(movie.id);
+  const media = mediaOf(movie);
+  const item = useWatchlistItem(movie.id, media);
   const save = useSaveWatchlistItem();
   const remove = useRemoveWatchlistItem();
 
@@ -17,7 +19,7 @@ export default function WatchlistButton({ movie, className }) {
   return (
     <button
       type="button"
-      onClick={() => (saved ? remove.mutate({ tmdb_id: movie.id }) : save.mutate({ tmdb_id: movie.id }))}
+      onClick={() => (saved ? remove.mutate({ tmdb_id: movie.id, media_type: media }) : save.mutate({ tmdb_id: movie.id, media_type: media }))}
       aria-label={label}
       aria-pressed={saved}
       title={watched ? 'Watched' : saved ? 'In your watchlist' : 'Add to watchlist'}

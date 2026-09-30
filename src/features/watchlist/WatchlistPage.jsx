@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, CalendarClock, Eye, Pencil, X } from 'lucide-react';
+import { Bookmark, CalendarClock, Eye, History, Pencil, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import ErrorBox from '@/components/ErrorBox';
@@ -23,15 +23,25 @@ const SORTS = [
   { value: 'tmdb', label: 'TMDB rating' },
 ];
 
+const TYPES = [
+  { value: 'all', label: 'Movies & series' },
+  { value: 'movie', label: 'Movies' },
+  { value: 'tv', label: 'Series' },
+];
+
 const DEFAULT_FILTERS = { genre: '', streaming: '', sort: 'added' };
 
 export default function WatchlistPage() {
   const country = useCountry();
   const watchlist = useWatchlist();
   const items = watchlist.data ?? [];
-  const movies = useMovies(items.map((i) => i.tmdb_id), country);
+  // Movie and series ids overlap, so they are fetched and looked up separately.
+  const movies = useMovies(items.filter((i) => i.media_type !== 'tv').map((i) => i.tmdb_id), country);
+  const series = useMovies(items.filter((i) => i.media_type === 'tv').map((i) => i.tmdb_id), country, 'tv');
+  const detailsFor = (item) => (item.media_type === 'tv' ? series.data : movies.data)?.get(item.tmdb_id);
 
   const [status, setStatus] = useState('all');
+  const [type, setType] = useState('all');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [editing, setEditing] = useState(null); // { movie, item } for the dialog
 
@@ -41,7 +51,8 @@ export default function WatchlistPage() {
   const entries = useMemo(
     () =>
       items.map((item) => {
-        const movie = movies.data?.get(item.tmdb_id);
+        const found = detailsFor(item);
+        const movie = found && { ...found, media_type: item.media_type };
         const release = movie ? regionalReleaseDate(movie, country) : null;
         return {
           item,
@@ -51,23 +62,27 @@ export default function WatchlistPage() {
           upcoming: item.status === 'want_to_watch' && !!release && release > today,
         };
       }),
-    [items, movies.data, country, today]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailsFor reads these two
+    [items, movies.data, series.data, country, today]
   );
 
   const genreOptions = useMemo(() => uniqueBy(entries.flatMap((e) => e.movie?.genres ?? []), 'id', 'name'), [entries]);
   const providerOptions = useMemo(() => uniqueBy(entries.flatMap((e) => e.stream), 'provider_id', 'provider_name'), [entries]);
 
+  const ofType = (item) => type === 'all' || item.media_type === type;
+  const typed = items.filter(ofType);
   const counts = {
-    all: items.length,
-    want_to_watch: items.filter((i) => i.status === 'want_to_watch').length,
-    watched: items.filter((i) => i.status === 'watched').length,
+    all: typed.length,
+    want_to_watch: typed.filter((i) => i.status === 'want_to_watch').length,
+    watched: typed.filter((i) => i.status === 'watched').length,
   };
 
   const comingSoon = status === 'watched'
     ? []
-    : entries.filter((e) => e.upcoming).sort((a, b) => a.release.localeCompare(b.release));
+    : entries.filter((e) => e.upcoming && ofType(e.item)).sort((a, b) => a.release.localeCompare(b.release));
 
   const visible = entries
+    .filter((e) => ofType(e.item))
     .filter((e) => status === 'all' || e.item.status === status)
     .filter((e) => !e.upcoming || status === 'watched')
     .filter((e) => !filters.genre || e.movie?.genres.some((g) => String(g.id) === filters.genre))
@@ -79,13 +94,26 @@ export default function WatchlistPage() {
     .sort(SORTERS[filters.sort]);
 
   const filtersActive = filters.genre || filters.streaming;
-  const loadingMovies = movies.isPending && items.length > 0;
+  const hasSeries = items.some((i) => i.media_type === 'tv');
+  const loadingMovies =
+    (movies.isPending && items.some((i) => i.media_type !== 'tv')) || (series.isPending && hasSeries);
+  const detailsError = movies.error ?? series.error;
 
   return (
     <div className="px-5 sm:px-8 lg:px-12 py-10 sm:py-14 max-w-6xl mx-auto w-full">
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-white">Watchlist</h1>
-        <p className="mt-1 text-sm text-slate-400">Films you've saved to come back to.</p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-white">Watchlist</h1>
+            <p className="mt-1 text-sm text-slate-400">Films and series you've saved, and what you've watched.</p>
+          </div>
+          <Link
+            to="/seen"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-white/20"
+          >
+            <History className="h-3.5 w-3.5" aria-hidden="true" /> Add what you've watched
+          </Link>
+        </div>
       </div>
 
       {watchlist.isPending && <GridSkeleton />}
@@ -101,11 +129,12 @@ export default function WatchlistPage() {
           </span>
           <p className="mt-4 font-medium text-slate-300">Your watchlist is empty</p>
           <p className="mt-1 max-w-xs text-sm text-slate-500">
-            Tap the bookmark on any film to save it here. Press <kbd className="rounded border border-white/10 px-1">/</kbd> to search.
+            Tap the bookmark on any film or series to save it here. Press <kbd className="rounded border border-white/10 px-1">/</kbd> to search.
           </p>
-          <Link to="/now-showing" className="mt-5 text-sm text-amber-300 hover:underline">
-            Browse what's showing
-          </Link>
+          <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+            <Link to="/seen" className="text-amber-300 hover:underline">Tell us what you've watched</Link>
+            <Link to="/now-showing" className="text-amber-300 hover:underline">Browse what's showing</Link>
+          </div>
         </div>
       )}
 
@@ -131,6 +160,11 @@ export default function WatchlistPage() {
 
           {/* Filters + sort */}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            {hasSeries && (
+              <FilterSelect label="Type" value={type} onChange={setType}>
+                {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </FilterSelect>
+            )}
             <FilterSelect label="Genre" value={filters.genre} onChange={(genre) => setFilters((f) => ({ ...f, genre }))}>
               <option value="">All genres</option>
               {genreOptions.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -153,9 +187,9 @@ export default function WatchlistPage() {
             )}
           </div>
 
-          {movies.isError && (
+          {detailsError && (
             <div className="mt-6">
-              <ErrorBox message={movies.error.message} onRetry={() => movies.refetch()} />
+              <ErrorBox message={detailsError.message} onRetry={() => { movies.refetch(); series.refetch(); }} />
             </div>
           )}
 
@@ -168,7 +202,7 @@ export default function WatchlistPage() {
               </div>
               <Grid>
                 {comingSoon.map((e, i) => (
-                  <MovieCard key={e.item.tmdb_id} movie={e.movie} index={i}>
+                  <MovieCard key={`${e.item.media_type}:${e.item.tmdb_id}`} movie={e.movie} index={i}>
                     <p className="inline-flex items-center gap-1.5 rounded-md bg-sky-400/15 px-2 py-1 text-xs font-medium text-sky-200">
                       <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" /> Out {formatReleaseDate(e.release)}
                     </p>
@@ -199,11 +233,11 @@ export default function WatchlistPage() {
               <Grid>
                 {visible.map((e, i) =>
                   e.movie ? (
-                    <MovieCard key={e.item.tmdb_id} movie={e.movie} index={i}>
+                    <MovieCard key={`${e.item.media_type}:${e.item.tmdb_id}`} movie={e.movie} index={i}>
                       <StatusControls item={e.item} onEdit={() => setEditing({ movie: e.movie, item: e.item })} />
                     </MovieCard>
                   ) : (
-                    <MovieCardSkeleton key={e.item.tmdb_id} />
+                    <MovieCardSkeleton key={`${e.item.media_type}:${e.item.tmdb_id}`} />
                   )
                 )}
               </Grid>
@@ -214,7 +248,7 @@ export default function WatchlistPage() {
 
       <MarkWatchedDialog
         movie={editing?.movie ?? { id: 0, title: '' }}
-        item={editing ? items.find((i) => i.tmdb_id === editing.movie.id) : undefined}
+        item={editing ? items.find((i) => i.tmdb_id === editing.movie.id && i.media_type === (editing.movie.media_type ?? 'movie')) : undefined}
         open={!!editing}
         onOpenChange={(open) => !open && setEditing(null)}
       />

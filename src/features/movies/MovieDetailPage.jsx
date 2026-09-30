@@ -14,11 +14,13 @@ import ShowtimesPanel from '@/features/cinemas/ShowtimesPanel';
 // Horizontal "More like this" row: cards are a fixed ~160px wide.
 const ROW_CARD_SIZES = '160px';
 
-export default function MovieDetailPage() {
+/** Detail page for a movie (/movie/:id) or a series (/tv/:id, media="tv"). */
+export default function MovieDetailPage({ media = 'movie' }) {
   const { tmdbId } = useParams();
   const id = Number(tmdbId);
   const country = useCountry();
-  const { data: movie, isPending, isError, error, refetch } = useMovie(id, country);
+  const { data: movie, isPending, isError, error, refetch } = useMovie(id, country, media);
+  const isSeries = media === 'tv';
   const [trailerOpen, setTrailerOpen] = useState(false);
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export default function MovieDetailPage() {
   }, [movie]);
 
   if (!Number.isInteger(id) || id <= 0 || error?.status === 404 || error?.status === 400) {
-    return <NotFound />;
+    return <NotFound isSeries={isSeries} />;
   }
   if (isError) {
     return (
@@ -46,9 +48,11 @@ export default function MovieDetailPage() {
   const trailer = pickTrailer(movie.videos);
   const certification = certificationFor(movie.release_dates, country);
   const year = releaseYear(movie.release_date);
-  const runtime = formatRuntime(movie.runtime);
+  const runtime = isSeries
+    ? [movie.seasons && `${movie.seasons} season${movie.seasons > 1 ? 's' : ''}`, movie.runtime && `~${formatRuntime(movie.runtime)} episodes`].filter(Boolean).join(' · ')
+    : formatRuntime(movie.runtime);
   const more = movie.recommendations.length ? movie.recommendations : movie.similar;
-  const inCinemas = isInCinemas(regionalReleaseDate(movie, country));
+  const inCinemas = !isSeries && isInCinemas(regionalReleaseDate(movie, country));
 
   return (
     <article>
@@ -89,7 +93,10 @@ export default function MovieDetailPage() {
               {movie.title}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-slate-300">
-              {year && <span>{year}</span>}
+              {isSeries && (
+                <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-200">Series</span>
+              )}
+              {year && <span>{isSeries && movie.status === 'Ended' ? `${year} · ended` : year}</span>}
               {certification && (
                 <span className="rounded border border-white/25 px-1.5 py-px text-xs font-semibold text-slate-200" title={`Rating in ${country}`}>
                   {certification}
@@ -145,7 +152,10 @@ export default function MovieDetailPage() {
               <p className="leading-relaxed text-slate-200">{movie.overview || 'No overview available yet.'}</p>
               {movie.directors.length > 0 && (
                 <p className="mt-4 text-sm text-slate-400">
-                  Directed by <span className="text-slate-200">{movie.directors.map((d) => d.name).join(', ')}</span>
+                  {isSeries ? 'Created by' : 'Directed by'} <span className="text-slate-200">{movie.directors.map((d) => d.name).join(', ')}</span>
+                  {isSeries && movie.networks?.length > 0 && (
+                    <> · on <span className="text-slate-200">{movie.networks.map((n) => n.name).join(', ')}</span></>
+                  )}
                 </p>
               )}
             </section>
@@ -177,20 +187,25 @@ export default function MovieDetailPage() {
             )}
           </div>
 
-          {/* Keyed by movie so the default tab resets when moving between movies. */}
-          <aside key={movie.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 self-start">
-            <Tabs defaultValue={inCinemas ? 'showtimes' : 'watch'}>
-              <TabsList className="grid h-10 w-full grid-cols-2 bg-white/5 text-slate-400">
-                <TabsTrigger value="watch" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Where to watch</TabsTrigger>
-                <TabsTrigger value="showtimes" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Showtimes</TabsTrigger>
-              </TabsList>
-              <TabsContent value="watch" className="mt-5">
-                <WatchProviders watchProviders={movie.watch_providers} country={country} />
-              </TabsContent>
-              <TabsContent value="showtimes" className="mt-5">
-                <ShowtimesPanel movie={movie} country={country} inCinemas={inCinemas} />
-              </TabsContent>
-            </Tabs>
+          {/* Keyed by title so the default tab resets when moving between titles. */}
+          <aside key={`${media}:${movie.id}`} className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 self-start">
+            {isSeries ? (
+              // Series aren't in cinemas: no showtimes.
+              <WatchProviders watchProviders={movie.watch_providers} country={country} />
+            ) : (
+              <Tabs defaultValue={inCinemas ? 'showtimes' : 'watch'}>
+                <TabsList className="grid h-10 w-full grid-cols-2 bg-white/5 text-slate-400">
+                  <TabsTrigger value="watch" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Where to watch</TabsTrigger>
+                  <TabsTrigger value="showtimes" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Showtimes</TabsTrigger>
+                </TabsList>
+                <TabsContent value="watch" className="mt-5">
+                  <WatchProviders watchProviders={movie.watch_providers} country={country} />
+                </TabsContent>
+                <TabsContent value="showtimes" className="mt-5">
+                  <ShowtimesPanel movie={movie} country={country} inCinemas={inCinemas} />
+                </TabsContent>
+              </Tabs>
+            )}
           </aside>
         </div>
 
@@ -222,12 +237,12 @@ function isInCinemas(releaseDate) {
   return release >= today - 120 * day && release <= today + 14 * day;
 }
 
-function NotFound() {
+function NotFound({ isSeries }) {
   return (
     <div className="flex flex-col items-center px-5 py-24 text-center">
       <Film className="h-10 w-10 text-slate-600" aria-hidden="true" />
-      <h1 className="mt-4 font-display text-2xl font-semibold text-white">Movie not found</h1>
-      <p className="mt-2 text-sm text-slate-400">We couldn't find that movie on TMDB.</p>
+      <h1 className="mt-4 font-display text-2xl font-semibold text-white">{isSeries ? 'Series' : 'Movie'} not found</h1>
+      <p className="mt-2 text-sm text-slate-400">We couldn't find that {isSeries ? 'series' : 'movie'} on TMDB.</p>
       <Link to="/now-showing" className="mt-6 inline-flex items-center gap-1.5 text-sm text-amber-300 hover:underline">
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Browse what's showing
       </Link>

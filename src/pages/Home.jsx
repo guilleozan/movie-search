@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { EyeOff, Loader2, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
+import { EyeOff, History, Loader2, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -9,7 +9,7 @@ import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import ErrorBox from '@/components/ErrorBox';
 import { useCountry, useMovie } from '@/features/movies/hooks';
 import Quiz from '@/features/recommendations/Quiz';
-import { CONTEXTS, ERAS, GENRES, MOODS } from '@/features/recommendations/quiz-options';
+import { CONTEXTS, ERAS, GENRES, MOODS, SERIES_CONTEXTS } from '@/features/recommendations/quiz-options';
 import TasteEditor from '@/features/recommendations/TasteEditor';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -65,36 +65,43 @@ function Picks({ answers }) {
   const [params, setParams] = useSearchParams();
   const seedParam = Number(params.get('seed'));
   const seed = Number.isInteger(seedParam) && seedParam > 0 ? seedParam : null;
-  const context = CONTEXTS.some((c) => c.id === params.get('context')) ? params.get('context') : 'home';
+  const media = params.get('media') === 'tv' ? 'tv' : 'movie';
+  // Series have no cinema or "short" occasions.
+  const contexts = media === 'tv' ? CONTEXTS.filter((c) => SERIES_CONTEXTS.has(c.id)) : CONTEXTS;
+  const context = contexts.some((c) => c.id === params.get('context')) ? params.get('context') : 'home';
+  const noun = media === 'tv' ? 'series' : 'films';
 
   const country = useCountry();
-  const seedMovie = useMovie(seed ?? 0, country);
-  const recs = useRecommendations({ context, seed });
-  const refresh = useRefreshRecommendations({ context, seed });
+  const seedMovie = useMovie(seed ?? 0, country, media);
+  const recs = useRecommendations({ media, context, seed });
+  const refresh = useRefreshRecommendations({ media, context, seed });
   const { dismiss, undo } = useDismissMovie();
 
   const items = recs.data?.items ?? [];
 
-  const setContext = (id) => setParams(id === 'home' ? {} : { context: id });
+  // URL params keep the view on refresh and back/forward: media, context, seed.
+  const withMedia = (next) => (media === 'tv' ? { media: 'tv', ...next } : next);
+  const setContext = (id) => setParams(withMedia(id === 'home' ? {} : { context: id }));
+  const setMedia = (next) => setParams(next === 'tv' ? { media: 'tv' } : {});
   const moreLike = (movie) => {
-    setParams({ seed: String(movie.id) });
+    setParams(withMedia({ seed: String(movie.id) }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const notInterested = (movie) =>
-    dismiss.mutate(movie.id, {
+    dismiss.mutate({ id: movie.id, media }, {
       onSuccess: (_data, _id, dismissed) =>
         toast({
           title: `Hidden ${movie.title}`,
           description: "We won't recommend it again.",
           action: (
-            <ToastAction altText="Undo" onClick={() => undo(movie.id, dismissed).catch((error) =>
+            <ToastAction altText="Undo" onClick={() => undo({ id: movie.id, media }, dismissed).catch((error) =>
               toast({ variant: 'destructive', title: "Couldn't undo", description: error.message }))}
             >
               Undo
             </ToastAction>
           ),
         }),
-      onError: (error) => toast({ variant: 'destructive', title: "Couldn't hide that film", description: error.message }),
+      onError: (error) => toast({ variant: 'destructive', title: "Couldn't hide that title", description: error.message }),
     });
   const onRefresh = () =>
     refresh.mutate(undefined, {
@@ -111,12 +118,15 @@ function Picks({ answers }) {
           <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-white">Your picks</h1>
           <p className="mt-1 text-sm text-slate-400">
             {items.length > 0
-              ? `${items.length} films matched to your taste. Tap the bookmark to save.`
-              : 'Films matched to your taste, from real movie data.'}
+              ? `${items.length} ${noun} matched to your taste. Tap the bookmark to save.`
+              : `${noun === 'films' ? 'Films' : 'Series'} matched to your taste, from real movie data.`}
           </p>
           <p className="mt-2 text-sm text-slate-500">
             <span className="text-slate-400">Your taste:</span> {tasteSummary(answers)}
           </p>
+          <Link to="/seen" className="mt-1 inline-flex items-center gap-1 text-sm text-amber-300 hover:underline">
+            <History className="h-3.5 w-3.5" aria-hidden="true" /> Tell us what you've watched for better picks
+          </Link>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -138,6 +148,23 @@ function Picks({ answers }) {
         </div>
       </div>
 
+      <div className="mb-4 flex w-fit gap-1 rounded-xl border border-white/10 bg-white/5 p-1" role="group" aria-label="Movies or series">
+        {[['movie', 'Movies'], ['tv', 'Series']].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={media === value}
+            onClick={() => setMedia(value)}
+            className={cn(
+              'rounded-lg px-4 py-1.5 text-sm font-medium transition-colors',
+              media === value ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-100'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {seed ? (
         <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
           <p className="min-w-0 text-sm text-amber-100">
@@ -146,7 +173,7 @@ function Picks({ answers }) {
           </p>
           <button
             type="button"
-            onClick={() => setParams({})}
+            onClick={() => setParams(withMedia({}))}
             className="inline-flex shrink-0 items-center gap-1 text-sm text-amber-200 hover:text-white"
           >
             <X className="h-4 w-4" aria-hidden="true" /> Back to all picks
@@ -154,7 +181,7 @@ function Picks({ answers }) {
         </div>
       ) : (
         <div className="-mx-5 mb-6 flex gap-2 overflow-x-auto px-5 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="What's the occasion?">
-          {CONTEXTS.map((c) => (
+          {contexts.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -194,7 +221,7 @@ function Picks({ answers }) {
       {items.length > 0 && (
         <Grid>
           {items.map((movie, i) => (
-            <MovieCard key={movie.id} movie={movie} index={i}>
+            <MovieCard key={`${media}:${movie.id}`} movie={movie} index={i}>
               <div className="flex gap-1.5">
                 <button
                   type="button"

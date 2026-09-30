@@ -11,7 +11,9 @@ import { invokeFunction } from '@/lib/edge-functions';
  * @property {number} vote_count
  * @property {string} overview
  * @property {{ id: number, name: string }[]} genres
- * @property {number | null} runtime minutes, null when unknown
+ * @property {number | null} runtime minutes, null when unknown (series: a typical episode)
+ * @property {'movie' | 'tv'} [media_type] missing on data cached before series support: a movie
+ * @property {number | null} [seasons] series only
  */
 
 /**
@@ -39,7 +41,18 @@ import { invokeFunction } from '@/lib/edge-functions';
  * @param {Record<string, unknown>} [params]
  */
 export function callTmdb(op, params = {}) {
+  // op: also 'tv' (series details) and 'match' (viewing-history import)
   return invokeFunction('tmdb', { op, params }, 'Movie data is unavailable right now');
+}
+
+/** 'movie' or 'tv' ("series"). Items without a media_type predate series support: movies. */
+export function mediaOf(item) {
+  return item?.media_type === 'tv' ? 'tv' : 'movie';
+}
+
+/** App route for a movie or series. */
+export function titlePath(item) {
+  return `/${mediaOf(item)}/${item.id}`;
 }
 
 /** @param {string | null | undefined} date */

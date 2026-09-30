@@ -1,13 +1,14 @@
 // TMDB proxy. Keeps TMDB_READ_TOKEN server side, allows only whitelisted
 // operations, and caches responses in Postgres.
 //
-// Request:  POST { op: 'search' | 'movie' | 'discover' | 'now_playing' | 'upcoming' | 'genres' | 'providers', params?: {...} }
+// Request:  POST { op: 'search' | 'movie' | 'tv' | 'discover' | 'now_playing' | 'upcoming' | 'genres' | 'providers' | 'match', params?: {...} }
+// Most ops take `media: 'movie' | 'tv'` (search also 'multi'); the default is 'movie'.
 // Response: JSON (shapes in ../_shared/tmdb.ts), or { error } with a 4xx/5xx status.
 
 import { HttpError, serveJson } from '../_shared/http.ts';
 import {
-  cachedList, discover, genreList, genreMap, getDetails, LIST_TTL, listPage, REFERENCE_TTL,
-  releaseList, requireTmdb, stableKey, tmdbFetch, toSummary,
+  cachedList, discover, genreList, genreMap, getDetails, LIST_TTL, listPage, type Media, type MovieSummary,
+  multiPage, REFERENCE_TTL, releaseList, requireTmdb, stableKey, tmdbFetch, toSummary,
 } from '../_shared/tmdb.ts';
 
 type Params = Record<string, unknown>;
@@ -15,74 +16,137 @@ type Params = Record<string, unknown>;
 // ---------- request handling ----------
 
 const OPERATIONS: Record<string, (params: Params) => Promise<unknown>> = {
-  search: async (p) => {
-    const query = text(p.query, 'query', 100);
-    const page = pageParam(p.page);
-    const year = p.year === undefined ? undefined : int(p.year, 'year', 1870, 2100);
-    return cachedList(`search:${stableKey({ query: query.toLowerCase(), page, year })}`, LIST_TTL, async () => {
-      const raw = await tmdbFetch('/search/movie', { query, page, year, include_adult: false });
-      return listPage(raw, await genreMap());
-    });
+  search: (p) => {
+    const media = p.media === 'multi' ? 'multi' : mediaParam(p.media);
+    return search(text(p.query, 'query', 100), media, pageParam(p.page), p.year === undefined ? undefined : int(p.year, 'year', 1870, 2100));
   },
 
   // { id } -> full details. { ids: [...] } (max 50) -> { results } with summaries plus
   // providers and release dates, for lists like the watchlist; unknown ids are skipped.
-  movie: async (p) => {
-    const country = region(p.region);
+  movie: (p) => details(p, 'movie'),
+  tv: (p) => details(p, 'tv'),
 
-    if (p.ids !== undefined) {
-      if (!Array.isArray(p.ids) || p.ids.length > 50) throw new HttpError(400, 'Invalid ids');
-      const ids = [...new Set(p.ids.map((id) => int(id, 'ids', 1, 1e9)))];
-      const found = ids.length ? await getDetails(ids) : [];
-      return {
-        results: found.filter(Boolean).map((d) => ({
-          ...toSummary(d!),
-          watch_providers: pickCountry(d!.watch_providers, country),
-          release_dates: pickCountry(d!.release_dates, country),
-        })),
-      };
+  // { titles: [...] (max 25), media } -> { results: [{ title, match }] }. For importing
+  // viewing history: a title matches only when exactly one of TMDB's results has
+  // the same normalised title, or several do and one is clearly the most popular.
+  match: async (p) => {
+    const media = mediaParam(p.media);
+    if (!Array.isArray(p.titles) || p.titles.length === 0 || p.titles.length > 25) throw new HttpError(400, 'Invalid titles');
+    const titles = p.titles.map((t) => text(t, 'titles', 200));
+    const results = [];
+    for (let i = 0; i < titles.length; i += 5) {
+      results.push(...await Promise.all(titles.slice(i, i + 5).map(async (title) => {
+        const page = await search(title, media, 1);
+        return { title, match: bestMatch(title, page.results) };
+      })));
     }
-
-    const id = int(p.id, 'id', 1, 1e9);
-    const [details] = await getDetails([id]);
-    if (!details) throw new HttpError(404, 'Movie not found');
-    // The cache keeps every country; send only the user's to keep the payload small.
-    return {
-      ...details,
-      watch_providers: pickCountry(details.watch_providers, country),
-      release_dates: pickCountry(details.release_dates, country),
-    };
+    return { results };
   },
 
-  discover: (p) => discover(discoverParams(p)),
+  discover: (p) => {
+    const { media, ...filters } = p;
+    return discover(discoverParams(filters), mediaParam(media));
+  },
 
   now_playing: (p) => releaseList('now_playing', region(p.region), pageParam(p.page)),
   upcoming: (p) => releaseList('upcoming', region(p.region), pageParam(p.page)),
 
-  genres: () => genreList().then((genres) => ({ genres })),
+  genres: (p) => genreList(mediaParam(p.media)).then((genres) => ({ genres })),
 
+  // Streaming services in a region. media 'all' merges the movie and series lists.
   providers: async (p) => {
     const watchRegion = region(p.region);
-    return cachedList(`providers:${watchRegion}`, REFERENCE_TTL, async () => {
-      let raw = await tmdbFetch('/watch/providers/movie', { watch_region: watchRegion });
-      // TMDB sometimes returns an empty regional list (e.g. NZ) even though movies
-      // have providers there. Fall back to the global list filtered by that region.
-      if (!raw.results?.length) {
-        const all = await tmdbFetch('/watch/providers/movie');
-        raw = { results: (all.results ?? []).filter((x: any) => x.display_priorities?.[watchRegion] !== undefined) };
+    if (p.media === 'all') {
+      const [movie, tv] = await Promise.all([providerList('movie', watchRegion), providerList('tv', watchRegion)]);
+      const merged = new Map<number, ProviderEntry>();
+      for (const x of [...movie, ...tv]) {
+        const seen = merged.get(x.provider_id);
+        if (!seen || x.display_priority < seen.display_priority) merged.set(x.provider_id, x);
       }
-      const providers = (raw.results ?? [])
-        .map((x: any) => ({
-          provider_id: x.provider_id,
-          provider_name: x.provider_name,
-          logo_path: x.logo_path,
-          display_priority: x.display_priorities?.[watchRegion] ?? x.display_priority,
-        }))
-        .sort((a: any, b: any) => a.display_priority - b.display_priority);
-      return { region: watchRegion, providers };
-    });
+      return { region: watchRegion, providers: [...merged.values()].sort((a, b) => a.display_priority - b.display_priority) };
+    }
+    return { region: watchRegion, providers: await providerList(mediaParam(p.media), watchRegion) };
   },
 };
+
+type ProviderEntry = { provider_id: number; provider_name: string; logo_path: string | null; display_priority: number };
+
+function providerList(media: Media, watchRegion: string): Promise<ProviderEntry[]> {
+  // Movie keys keep their original form so existing cache rows stay valid.
+  const key = media === 'tv' ? `providers:tv:${watchRegion}` : `providers:${watchRegion}`;
+  return cachedList(key, REFERENCE_TTL, async () => {
+    let raw = await tmdbFetch(`/watch/providers/${media}`, { watch_region: watchRegion });
+    // TMDB sometimes returns an empty regional list (e.g. NZ) even though titles
+    // have providers there. Fall back to the global list filtered by that region.
+    if (!raw.results?.length) {
+      const all = await tmdbFetch(`/watch/providers/${media}`);
+      raw = { results: (all.results ?? []).filter((x: any) => x.display_priorities?.[watchRegion] !== undefined) };
+    }
+    return (raw.results ?? [])
+      .map((x: any) => ({
+        provider_id: x.provider_id,
+        provider_name: x.provider_name,
+        logo_path: x.logo_path,
+        display_priority: x.display_priorities?.[watchRegion] ?? x.display_priority,
+      }))
+      .sort((a: ProviderEntry, b: ProviderEntry) => a.display_priority - b.display_priority);
+  }).then((data) => (Array.isArray(data) ? data : (data as { providers: ProviderEntry[] }).providers));
+}
+
+function search(query: string, media: Media | 'multi', page: number, year?: number) {
+  // Movie keys keep their original form so existing cache rows stay valid.
+  const prefix = media === 'movie' ? 'search' : `search:${media}`;
+  return cachedList(`${prefix}:${stableKey({ query: query.toLowerCase(), page, year })}`, LIST_TTL, async () => {
+    if (media === 'multi') {
+      const raw = await tmdbFetch('/search/multi', { query, page, include_adult: false });
+      return multiPage(raw, await genreMap('movie'), await genreMap('tv'));
+    }
+    const yearKey = media === 'tv' ? 'first_air_date_year' : 'year';
+    const raw = await tmdbFetch(`/search/${media}`, { query, page, [yearKey]: year, include_adult: false });
+    return listPage(raw, await genreMap(media), media);
+  });
+}
+
+async function details(p: Params, media: Media) {
+  const country = region(p.region);
+
+  if (p.ids !== undefined) {
+    if (!Array.isArray(p.ids) || p.ids.length > 50) throw new HttpError(400, 'Invalid ids');
+    const ids = [...new Set(p.ids.map((id) => int(id, 'ids', 1, 1e9)))];
+    const found = ids.length ? await getDetails(ids, media) : [];
+    return {
+      results: found.filter(Boolean).map((d) => ({
+        ...toSummary(d!),
+        watch_providers: pickCountry(d!.watch_providers, country),
+        release_dates: pickCountry(d!.release_dates, country),
+      })),
+    };
+  }
+
+  const id = int(p.id, 'id', 1, 1e9);
+  const [found] = await getDetails([id], media);
+  if (!found) throw new HttpError(404, media === 'tv' ? 'Series not found' : 'Movie not found');
+  // The cache keeps every country; send only the user's to keep the payload small.
+  return {
+    ...found,
+    media_type: media,
+    watch_providers: pickCountry(found.watch_providers, country),
+    release_dates: pickCountry(found.release_dates, country),
+  };
+}
+
+const normalise = (t: string) =>
+  t.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/** The single confident match for `title`, or null (never a guess between equals). */
+function bestMatch(title: string, results: MovieSummary[]): MovieSummary | null {
+  const same = results.filter((r) => normalise(r.title) === normalise(title));
+  if (same.length === 0) return null;
+  const [first, second] = [...same].sort((a, b) => b.vote_count - a.vote_count);
+  // Remakes share titles: only pick the most popular when it clearly dominates.
+  if (second && first.vote_count < second.vote_count * 3) return null;
+  return first;
+}
 
 serveJson(async (body) => {
   requireTmdb();
@@ -116,6 +180,12 @@ function region(value: unknown): string {
   return value;
 }
 
+function mediaParam(value: unknown): Media {
+  if (value === undefined || value === 'movie') return 'movie';
+  if (value === 'tv') return 'tv';
+  throw new HttpError(400, 'Invalid media');
+}
+
 function pageParam(value: unknown): number {
   return value === undefined ? 1 : int(value, 'page', 1, 500);
 }
@@ -130,6 +200,8 @@ const DISCOVER_RULES: Record<string, (v: unknown) => unknown> = {
   without_genres: (v) => match(v, ID_LIST, 'without_genres'),
   'primary_release_date.gte': (v) => match(v, DATE, 'primary_release_date.gte'),
   'primary_release_date.lte': (v) => match(v, DATE, 'primary_release_date.lte'),
+  'first_air_date.gte': (v) => match(v, DATE, 'first_air_date.gte'),
+  'first_air_date.lte': (v) => match(v, DATE, 'first_air_date.lte'),
   'vote_count.gte': (v) => int(v, 'vote_count.gte', 0, 1e7),
   'vote_average.gte': (v) => {
     const n = Number(v);

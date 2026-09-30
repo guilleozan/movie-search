@@ -58,23 +58,23 @@ export function useSaveQuizAnswers() {
   });
 }
 
-const recommendationsKey = (userId, context, seed) => ['recommendations', userId, seed ? `seed:${seed}` : context];
+const recommendationsKey = (userId, media, context, seed) => ['recommendations', userId, media, seed ? `seed:${seed}` : context];
 
 /**
  * Personal picks from the `recommend` Edge Function (cached server side for a few hours).
  *
- * @param {{ context: string, seed: number | null, enabled?: boolean }} opts
+ * @param {{ media?: 'movie' | 'tv', context: string, seed: number | null, enabled?: boolean }} opts
  */
-export function useRecommendations({ context, seed, enabled = true }) {
+export function useRecommendations({ media = 'movie', context, seed, enabled = true }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useQuery({
-    queryKey: recommendationsKey(user?.id, context, seed),
+    queryKey: recommendationsKey(user?.id, media, context, seed),
     enabled: !!user && enabled,
     staleTime: 30 * 60 * 1000,
     retry: retryServerErrors,
     queryFn: async () => {
-      const set = await fetchRecommendations({ context, seed });
+      const set = await fetchRecommendations({ media, context, seed });
       // The function rebuilds the taste profile when it makes a new set.
       if (!set.cached) queryClient.invalidateQueries({ queryKey: ['taste-profile', user?.id] });
       return set;
@@ -133,27 +133,27 @@ export function matchScore(movie, taste) {
 }
 
 /** Ask for a fresh set, bypassing the server cache. */
-export function useRefreshRecommendations({ context, seed }) {
+export function useRefreshRecommendations({ media = 'movie', context, seed }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => fetchRecommendations({ context, seed, refresh: true }),
-    onSuccess: (data) => queryClient.setQueryData(recommendationsKey(user?.id, context, seed), data),
+    mutationFn: () => fetchRecommendations({ media, context, seed, refresh: true }),
+    onSuccess: (data) => queryClient.setQueryData(recommendationsKey(user?.id, media, context, seed), data),
   });
 }
 
 /** @returns {Promise<RecommendationSet>} */
-function fetchRecommendations({ context, seed, refresh = false }) {
+function fetchRecommendations({ media, context, seed, refresh = false }) {
   return invokeFunction(
     'recommend',
-    { context, ...(seed ? { seed } : {}), ...(refresh ? { refresh } : {}) },
+    { media, context, ...(seed ? { seed } : {}), ...(refresh ? { refresh } : {}) },
     "We couldn't put your picks together right now."
   );
 }
 
 /**
  * "Not interested": hide a movie from every recommendation list right away and
- * remember it server side. `undo(tmdbId, previous)` puts it back; `previous` is
+ * remember it server side. `undo({ id, media }, previous)` puts it back; `previous` is
  * the mutation context (third argument of the per-call onSuccess).
  */
 export function useDismissMovie() {
@@ -162,25 +162,28 @@ export function useDismissMovie() {
   const key = ['recommendations', user?.id];
   const restore = (previous) => previous.forEach(([k, data]) => queryClient.setQueryData(k, data));
 
+  // Variables: { id, media }. Movie and series ids overlap, so both are needed.
   const dismiss = useMutation({
-    mutationFn: async (tmdbId) => {
-      const { error } = await supabase.from('dismissed_movies').upsert({ tmdb_id: tmdbId }, { onConflict: 'user_id,tmdb_id' });
+    mutationFn: async ({ id, media }) => {
+      const { error } = await supabase
+        .from('dismissed_movies')
+        .upsert({ tmdb_id: id, media_type: media }, { onConflict: 'user_id,media_type,tmdb_id' });
       if (error) throw error;
     },
-    onMutate: async (tmdbId) => {
+    onMutate: async ({ id, media }) => {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueriesData({ queryKey: key });
       queryClient.setQueriesData({ queryKey: key }, (set) =>
-        set ? { ...set, items: set.items.filter((m) => m.id !== tmdbId) } : set
+        set ? { ...set, items: set.items.filter((m) => !(m.id === id && (m.media_type ?? 'movie') === media)) } : set
       );
       return { previous };
     },
-    onError: (_error, _tmdbId, context) => context && restore(context.previous),
+    onError: (_error, _vars, context) => context && restore(context.previous),
   });
 
-  const undo = async (tmdbId, { previous }) => {
+  const undo = async ({ id, media }, { previous }) => {
     restore(previous);
-    const { error } = await supabase.from('dismissed_movies').delete().eq('tmdb_id', tmdbId);
+    const { error } = await supabase.from('dismissed_movies').delete().eq('tmdb_id', id).eq('media_type', media);
     if (error) throw error;
   };
 

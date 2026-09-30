@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Clapperboard, Loader2, Search, X } from 'lucide-react';
 import SearchResults, { useSearchResults } from '@/features/movies/SearchResults';
+import { titlePath } from '@/lib/tmdb';
 
 const EASE = [0.32, 0.72, 0, 1];
 
@@ -36,9 +37,9 @@ export default function MobileTopBar() {
     inputRef.current?.focus();
   };
 
-  const openMovie = (id) => {
+  const openMovie = (movie) => {
     close();
-    navigate(`/movie/${id}`);
+    navigate(titlePath(movie));
   };
 
   return (
@@ -65,7 +66,7 @@ export default function MobileTopBar() {
           style={{ width: open ? 'calc(100% - 2rem)' : '2.25rem' }}
           onSubmit={(e) => {
             e.preventDefault();
-            if (search.results[0]) openMovie(search.results[0].id);
+            if (search.results[0]) openMovie(search.results[0]);
           }}
           onKeyDown={(e) => e.key === 'Escape' && close()}
           className={`absolute right-4 top-2.5 flex h-9 items-center overflow-hidden rounded-lg border transition-[width,background-color,border-color] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
@@ -87,7 +88,7 @@ export default function MobileTopBar() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search movies…"
+            placeholder="Search movies & series…"
             aria-label="Search movies"
             tabIndex={open ? 0 : -1}
             aria-hidden={!open}

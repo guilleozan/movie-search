@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils';
 /**
  * 1-5 stars as a radio group (arrow keys work). Clicking the current value clears it.
  *
- * @param {{ value: number | null, onChange: (value: number | null) => void }} props
+ * @param {{ value: number | null, onChange: (value: number | null) => void, size?: 'md' | 'sm' }} props
  */
-export function RatingInput({ value, onChange }) {
+export function RatingInput({ value, onChange, size = 'md' }) {
   return (
     <div role="radiogroup" aria-label="Your rating" className="flex gap-1">
       {[1, 2, 3, 4, 5].map((n) => (
@@ -28,10 +28,10 @@ export function RatingInput({ value, onChange }) {
               onChange(Math.max(1, (value ?? 2) - 1));
             }
           }}
-          className="rounded p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          className={cn('rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400', size === 'sm' ? 'p-0.5' : 'p-1')}
         >
           <Star
-            className={cn('h-7 w-7 transition-colors', value && n <= value ? 'fill-amber-400 text-amber-400' : 'text-slate-600')}
+            className={cn(size === 'sm' ? 'h-5 w-5' : 'h-7 w-7', 'transition-colors', value && n <= value ? 'fill-amber-400 text-amber-400' : 'text-slate-600')}
             aria-hidden="true"
           />
         </button>

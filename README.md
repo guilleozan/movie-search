@@ -107,6 +107,13 @@ LLM_MODEL=claude-opus-5  # any model id from that provider
 LLM_API_KEY=<key>
 ```
 
+## Series, watch history and streaming services
+
+- **Series** work everywhere movies do: search (both together), detail pages at `/tv/:id`, the watchlist and recommendations (a Movies / Series switch on Discover). TMDB movie and series ids overlap, so tables keyed by `tmdb_id` also store `media_type`.
+- **What you've watched** (`/seen`): mark films and series as seen from any service, with an optional rating and where (`watched_on`). Recommendations learn from series too (their genres are mapped onto movie genres) and never suggest what's already watched.
+- **Netflix import**: upload the CSV from Netflix's *Viewing activity → Download all*. It is parsed in the browser; titles are matched with the `tmdb` function's `match` op, which only accepts confident matches. The user reviews the list before anything is saved, and each title keeps its last watch date.
+- **Streaming services** (profile): the services the user pays for (`profiles.streaming_services`, TMDB provider ids). Recommendations rank titles on them higher and show "On Neon", "On Netflix", etc.
+
 ## Location, cinemas and showtimes
 
 - **Location**: "Use my location" (browser geolocation) or a town/city search, on Now Showing, the profile page and the Showtimes tab. Only the town, country and a position rounded to about 1 km are saved in `profiles`. The country drives TMDB region, certifications, release dates and where to watch.

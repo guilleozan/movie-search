@@ -1,8 +1,9 @@
 // Quiz definitions and the taste profile built from quiz answers, ratings,
-// reactions and the watchlist.
+// reactions and the watchlist (movies and series alike: series genres are mapped
+// onto movie genres, so one set of weights serves both).
 
 import { HttpError } from '../_shared/http.ts';
-import { getDetails, type MovieDetails } from '../_shared/tmdb.ts';
+import { getDetails, type Media, type MovieDetails, toMovieGenre } from '../_shared/tmdb.ts';
 
 // TMDB genre ids used below.
 const G = {
@@ -36,8 +37,8 @@ export type QuizAnswers = { genres: number[]; mood: string | null; era: string |
 export type TasteProfile = {
   genres: { id: number; name: string; weight: number }[];
   disliked_genres: { id: number; name: string }[];
-  liked: { id: number; title: string; year: string; why: string }[];
-  disliked: { id: number; title: string; year: string }[];
+  liked: { id: number; media: Media; title: string; year: string; why: string }[];
+  disliked: { id: number; media: Media; title: string; year: string }[];
   mood: string | null;
   era: string | null;
   decades: string[];
@@ -47,6 +48,7 @@ export type TasteProfile = {
 
 export type WatchlistRow = {
   tmdb_id: number;
+  media_type: Media;
   status: 'want_to_watch' | 'watched';
   rating: number | null;
   reaction: 'loved' | 'fine' | 'not_for_me' | null;
@@ -85,7 +87,7 @@ export async function buildTasteProfile(
   quiz: QuizAnswers | null,
   watchlist: WatchlistRow[],
   genreNames: Map<number, string>,
-): Promise<{ profile: TasteProfile; details: Map<number, MovieDetails> }> {
+): Promise<{ profile: TasteProfile; details: Map<string, MovieDetails> }> {
   const watched = watchlist.filter((r) => r.status === 'watched');
   const saved = watchlist.filter((r) => r.status === 'want_to_watch');
   if (!quiz && watchlist.length === 0) throw new HttpError(409, 'Take the quiz first');
@@ -93,8 +95,15 @@ export async function buildTasteProfile(
   // Bounded so a huge watchlist can't make this slow: recent ratings matter most.
   const favorites = quiz?.favorites ?? [];
   const rows = [...watched.slice(0, 40), ...saved.slice(0, 30)];
-  const ids = [...new Set([...favorites, ...rows.map((r) => r.tmdb_id)])];
-  const details = new Map((await getDetails(ids)).filter(Boolean).map((d) => [d!.id, d!]));
+  const idsOf = (media: Media) => [...new Set(rows.filter((r) => r.media_type === media).map((r) => r.tmdb_id))];
+  const [movies, series] = await Promise.all([
+    getDetails([...new Set([...favorites, ...idsOf('movie')])]),
+    idsOf('tv').length ? getDetails(idsOf('tv'), 'tv') : Promise.resolve([]),
+  ]);
+  // Keyed "movie:123" / "tv:456": TMDB movie and series ids overlap.
+  const details = new Map<string, MovieDetails>();
+  for (const d of movies) if (d) details.set(`movie:${d.id}`, d);
+  for (const d of series) if (d) details.set(`tv:${d.id}`, { ...d, media_type: 'tv' });
 
   const weights = new Map<number, number>();
   const bump = (id: number, by: number) => weights.set(id, (weights.get(id) ?? 0) + by);
@@ -106,19 +115,19 @@ export async function buildTasteProfile(
   // [movie, how much they like it, why it counts as liked]
   const scored: [MovieDetails, number, string][] = [];
   for (const id of favorites) {
-    const d = details.get(id);
+    const d = details.get(`movie:${id}`);
     if (d) scored.push([d, 2.5, 'one of their favourites']);
   }
   for (const row of rows) {
-    const d = details.get(row.tmdb_id);
-    if (!d || favorites.includes(row.tmdb_id)) continue;
+    const d = details.get(`${row.media_type}:${row.tmdb_id}`);
+    if (!d || (row.media_type === 'movie' && favorites.includes(row.tmdb_id))) continue;
     const why = row.status === 'want_to_watch'
       ? 'on their watchlist'
       : [row.rating && `rated ${row.rating}/5`, row.reaction === 'loved' && 'loved it', row.reaction === 'not_for_me' && 'not for them']
         .filter(Boolean).join(', ') || 'watched';
     scored.push([d, signal(row), why]);
   }
-  for (const [d, s] of scored) for (const g of d.genres) bump(g.id, s * 0.5);
+  for (const [d, s] of scored) for (const g of d.genres) bump(toMovieGenre(g.id), s * 0.5);
 
   const liked = scored.filter(([, s]) => s >= 1).sort((a, b) => b[1] - a[1]);
   const disliked = scored.filter(([, s]) => s <= -1).sort((a, b) => a[1] - b[1]);
@@ -144,15 +153,16 @@ export async function buildTasteProfile(
     decades = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([decade]) => decade);
   }
 
-  const runtimes = liked.map(([d]) => d.runtime).filter((r): r is number => !!r).sort((a, b) => a - b);
+  // Movies only: episode lengths would drag the typical film runtime down.
+  const runtimes = liked.filter(([d]) => d.media_type !== 'tv').map(([d]) => d.runtime).filter((r): r is number => !!r).sort((a, b) => a - b);
 
   return {
     details,
     profile: {
       genres,
       disliked_genres: dislikedGenres,
-      liked: liked.slice(0, 10).map(([d, , why]) => ({ id: d.id, title: d.title, year: year(d), why })),
-      disliked: disliked.slice(0, 10).map(([d]) => ({ id: d.id, title: d.title, year: year(d) })),
+      liked: liked.slice(0, 10).map(([d, , why]) => ({ id: d.id, media: d.media_type ?? 'movie', title: d.title, year: year(d), why })),
+      disliked: disliked.slice(0, 10).map(([d]) => ({ id: d.id, media: d.media_type ?? 'movie', title: d.title, year: year(d) })),
       mood: quiz?.mood ?? null,
       era: quiz?.era ?? null,
       decades,

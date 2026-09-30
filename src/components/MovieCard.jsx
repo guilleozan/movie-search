@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Star, Film } from 'lucide-react';
 import { tmdbImage, posterSrcSet } from '@/lib/tmdb-images';
-import { formatRuntime, releaseYear } from '@/lib/tmdb';
+import { formatRuntime, mediaOf, releaseYear, titlePath } from '@/lib/tmdb';
 import WatchlistButton from '@/features/watchlist/WatchlistButton';
 
 // Matches the grids that use this card (2 / 3 / 4 / 5 columns).
@@ -13,7 +13,7 @@ const GRID_SIZES = '(min-width: 1280px) 200px, (min-width: 1024px) 25vw, (min-wi
  * Poster card linking to the movie page.
  *
  * @param {Object} props
- * @param {import('@/lib/tmdb').MovieSummary & { reason?: string }} props.movie
+ * @param {import('@/lib/tmdb').MovieSummary & { reason?: string, on_services?: { provider_id: number, provider_name: string, logo_path: string | null }[] }} props.movie
  * @param {number} [props.index] position in the grid, for the staggered entrance
  * @param {string} [props.sizes] `sizes` for the poster srcset
  * @param {boolean} [props.showSave] show the watchlist bookmark (default true)
@@ -21,7 +21,11 @@ const GRID_SIZES = '(min-width: 1280px) 200px, (min-width: 1024px) 25vw, (min-wi
  */
 export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, showSave = true, children }) {
   const year = releaseYear(movie.release_date);
-  const runtime = formatRuntime(movie.runtime);
+  const isSeries = mediaOf(movie) === 'tv';
+  // Series show seasons instead of an episode runtime.
+  const runtime = isSeries
+    ? movie.seasons ? `${movie.seasons} season${movie.seasons > 1 ? 's' : ''}` : ''
+    : formatRuntime(movie.runtime);
   const genres = movie.genres?.slice(0, 2).map((g) => g.name).join(' · ');
 
   return (
@@ -32,7 +36,7 @@ export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, showSa
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03] transition-colors hover:border-white/15"
     >
       <Link
-        to={`/movie/${movie.id}`}
+        to={titlePath(movie)}
         className="flex flex-1 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-2xl"
       >
         <div className="relative aspect-[2/3] overflow-hidden bg-slate-900">
@@ -63,9 +67,20 @@ export default function MovieCard({ movie, index = 0, sizes = GRID_SIZES, showSa
             {movie.title}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
+            {isSeries && <span className="mr-1.5 rounded bg-sky-400/15 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-sky-200">Series</span>}
             {[year, runtime].filter(Boolean).join(' · ')}
           </p>
           {genres && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{genres}</p>}
+          {movie.on_services?.length > 0 && (
+            <p className="mt-2 flex flex-wrap items-center gap-1.5">
+              {movie.on_services.map((s) => (
+                <span key={s.provider_id} className="inline-flex items-center gap-1 rounded-md bg-emerald-400/15 py-0.5 pl-0.5 pr-1.5 text-[11px] font-medium text-emerald-200">
+                  {s.logo_path && <img src={tmdbImage(s.logo_path, 'w92')} alt="" className="h-4 w-4 rounded" loading="lazy" />}
+                  On {s.provider_name}
+                </span>
+              ))}
+            </p>
+          )}
           {movie.reason && <p className="mt-2 text-xs leading-relaxed text-slate-300">{movie.reason}</p>}
         </div>
       </Link>

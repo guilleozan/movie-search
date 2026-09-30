@@ -5,20 +5,25 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { REACTIONS, useSaveWatchlistItem } from '@/features/watchlist/hooks';
 import { RatingInput } from '@/features/watchlist/RatingInput';
+import PlatformSelect from '@/features/watchlist/PlatformSelect';
+import { mediaOf } from '@/lib/tmdb';
 
 const REACTION_ICONS = { loved: Heart, fine: Meh, not_for_me: ThumbsDown };
 
 /**
- * Mark a movie as watched with an optional rating, reaction and notes. When the
- * movie is already watched this edits those, and can move it back to "want to watch".
+ * Mark a movie or series as watched with an optional rating, reaction, notes and
+ * where it was watched. When it is already watched this edits those, and can move
+ * it back to "want to watch".
  *
- * @param {{ movie: { id: number, title: string }, item?: import('./hooks').WatchlistItem, open: boolean, onOpenChange: (open: boolean) => void }} props
+ * @param {{ movie: { id: number, title: string, media_type?: 'movie' | 'tv' }, item?: import('./hooks').WatchlistItem, open: boolean, onOpenChange: (open: boolean) => void }} props
  */
 export default function MarkWatchedDialog({ movie, item, open, onOpenChange }) {
   const save = useSaveWatchlistItem();
   const [rating, setRating] = useState(null);
   const [reaction, setReaction] = useState(null);
   const [notes, setNotes] = useState('');
+  const [watchedOn, setWatchedOn] = useState(null);
+  const media = mediaOf(movie);
   const editing = item?.status === 'watched';
 
   // Start from the saved values each time the dialog opens.
@@ -27,17 +32,18 @@ export default function MarkWatchedDialog({ movie, item, open, onOpenChange }) {
       setRating(item?.rating ?? null);
       setReaction(item?.reaction ?? null);
       setNotes(item?.notes ?? '');
+      setWatchedOn(item?.watched_on ?? null);
     }
   }, [open, item]);
 
   const submit = (e) => {
     e.preventDefault();
-    save.mutate({ tmdb_id: movie.id, status: 'watched', rating, reaction, notes: notes.trim() || null });
+    save.mutate({ tmdb_id: movie.id, media_type: media, status: 'watched', rating, reaction, notes: notes.trim() || null, watched_on: watchedOn });
     onOpenChange(false);
   };
 
   const moveBack = () => {
-    save.mutate({ tmdb_id: movie.id, status: 'want_to_watch' });
+    save.mutate({ tmdb_id: movie.id, media_type: media, status: 'want_to_watch' });
     onOpenChange(false);
   };
 
@@ -80,6 +86,13 @@ export default function MarkWatchedDialog({ movie, item, open, onOpenChange }) {
               })}
             </div>
           </fieldset>
+
+          <div>
+            <label htmlFor="watched-on" className="mb-2 block text-sm font-medium text-slate-200">
+              Where did you watch it? <span className="font-normal text-slate-500">(optional)</span>
+            </label>
+            <PlatformSelect id="watched-on" value={watchedOn} onChange={setWatchedOn} />
+          </div>
 
           <div>
             <label htmlFor="watch-notes" className="mb-2 block text-sm font-medium text-slate-200">
