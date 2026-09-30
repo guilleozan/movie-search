@@ -114,6 +114,15 @@ LLM_API_KEY=<key>
 - **Netflix import**: upload the CSV from Netflix's *Viewing activity → Download all*. It is parsed in the browser; titles are matched with the `tmdb` function's `match` op, which only accepts confident matches. The user reviews the list before anything is saved, and each title keeps its last watch date.
 - **Streaming services** (profile): the services the user pays for (`profiles.streaming_services`, TMDB provider ids). Recommendations rank titles on them higher and show "On Neon", "On Netflix", etc.
 
+## Together: shared lists and movie night
+
+Under **Together** (`/together`):
+
+- **Shared lists**: a user creates a list and invites people with a link. The owner chooses whether the link makes people editors ("Can add") or viewers, and can change roles or remove members. Everyone sees who added each title, and changes appear live (Supabase Realtime). Titles can also be added from any title page ("Add to list").
+- **Movie night**: the host creates a night (movies or series, optionally from a list) and shares the link. When the host starts, the `movie-night` Edge Function builds a pool of up to 25 titles from everyone's watchlists and latest picks plus the list. It prefers what's streaming on any member's service in the host's country (or in cinemas), and leaves out what everyone has seen or anyone dismissed. Everyone swipes yes or no; a yes from everyone is a match, shown live. A night ends after 24 hours.
+
+Invite links carry a random token. Joining goes through `join_list()` / `join_movie_night()` (database functions that check the token), never a public insert. Only the owner can read a list's token; members of a night can read its token. RLS keeps lists, nights and votes visible to members only, and people can see the names of those they share a list or night with.
+
 ## Alerts
 
 The `alerts` Edge Function tells users when something on their watchlist becomes available: it lands on one of their streaming services, opens in cinemas in their country this week, or a series they're watching has a new episode. Alerts appear under the bell (`/alerts`). A user's first check only records what's already true, so they're told about changes, not everything at once.
@@ -162,6 +171,7 @@ OpenStreetMap's free services have usage policies: the function identifies the a
    npx supabase functions deploy recommend
    npx supabase functions deploy showtimes
    npx supabase functions deploy alerts   # then add the Vault secrets from "Alerts"
+   npx supabase functions deploy movie-night
    # optional, for LLM-written picks (see "Recommendations"):
    npx supabase secrets set LLM_PROVIDER=anthropic LLM_MODEL=claude-opus-5 LLM_API_KEY=<key>
    ```

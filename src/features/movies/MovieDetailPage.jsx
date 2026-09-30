@@ -10,6 +10,7 @@ import TrailerModal from '@/features/movies/TrailerModal';
 import WatchProviders from '@/features/movies/WatchProviders';
 import WatchlistActions from '@/features/watchlist/WatchlistActions';
 import SeriesProgress from '@/features/watchlist/SeriesProgress';
+import AddToList from '@/features/social/AddToList';
 import ShowtimesPanel from '@/features/cinemas/ShowtimesPanel';
 
 // Horizontal "More like this" row: cards are a fixed ~160px wide.
@@ -121,8 +122,9 @@ export default function MovieDetailPage({ media = 'movie' }) {
                 ))}
               </ul>
             )}
-            <div className="mt-5">
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <WatchlistActions movie={movie} />
+              <AddToList title={{ ...movie, media_type: media }} />
             </div>
             {isSeries && <SeriesProgress series={movie} />}
             {trailer && (

@@ -24,6 +24,10 @@ import ProfilePage from '@/features/profile/ProfilePage';
 import SeenPage from '@/features/history/SeenPage';
 import SwipePage from '@/features/history/SwipePage';
 import AlertsPage from '@/features/alerts/AlertsPage';
+import TogetherPage from '@/features/social/TogetherPage';
+import ListPage from '@/features/social/ListPage';
+import NightPage from '@/features/social/NightPage';
+import JoinPage from '@/features/social/JoinPage';
 import ServicesPage from '@/features/services/ServicesPage';
 
 function App() {
@@ -58,6 +62,10 @@ function App() {
                   <Route path="/services" element={<ServicesPage />} />
                   <Route path="/swipe" element={<SwipePage />} />
                   <Route path="/alerts" element={<AlertsPage />} />
+                  <Route path="/together" element={<TogetherPage />} />
+                  <Route path="/lists/:listId" element={<ListPage />} />
+                  <Route path="/nights/:nightId" element={<NightPage />} />
+                  <Route path="/join/:kind/:token" element={<JoinPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
-import { Bell, Clapperboard, Bookmark, Compass, Ticket, LogOut, Search, UserRound } from 'lucide-react';
+import { Bell, Clapperboard, Bookmark, Compass, Ticket, LogOut, Search, UserRound, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/', label: 'Discover', icon: Compass, end: true },
   { to: '/now-showing', label: 'Now Showing', icon: Ticket, end: false },
   { to: '/watchlist', label: 'Watchlist', icon: Bookmark, end: false },
+  { to: '/together', label: 'Together', icon: Users, end: false },
 ];
 
 // On mobile, Profile joins the tab bar (sign out lives on the profile page).
@@ -138,7 +139,7 @@ export default function Layout() {
         aria-label="Main"
         className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
       >
-        <ul className="grid h-16 grid-cols-4">
+        <ul className="grid h-16 grid-cols-5">
           {mobileNavItems.map((item) => (
             <li key={item.to}>
               <NavLink

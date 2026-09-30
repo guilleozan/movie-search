@@ -1,16 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion';
-import { Bookmark, Film, Heart, SkipForward, ThumbsDown } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { Bookmark, Heart, SkipForward, ThumbsDown } from 'lucide-react';
+import SwipeCard, { SwipePoster } from '@/components/SwipeCard';
 import { cn } from '@/lib/utils';
 import ErrorBox from '@/components/ErrorBox';
-import { callTmdb, releaseYear } from '@/lib/tmdb';
+import { callTmdb } from '@/lib/tmdb';
 import { retryServerErrors } from '@/lib/edge-functions';
-import { tmdbImage, posterSrcSet } from '@/lib/tmdb-images';
 import { useSaveWatchlistItem, useWatchlist } from '@/features/watchlist/hooks';
 
-const SWIPE_DISTANCE = 110;
 const SKIPPED_KEY = 'cinematch.swipeSkipped';
 
 /** The four answers; `save` is what goes into the watchlist (null: nothing saved). */
@@ -121,9 +120,17 @@ export default function SwipePage() {
           </div>
         )}
         {/* The next card sits underneath, so it's there when the top one flies off. */}
-        {cards[1] && <Poster title={cards[1]} caption={false} className="absolute inset-0 scale-95 opacity-50" />}
+        {cards[1] && <SwipePoster title={cards[1]} caption={false} className="absolute inset-0 scale-95 opacity-50" />}
         <AnimatePresence custom={exit}>
-          {current && <SwipeCard key={`${media}:${current.id}`} title={current} onAnswer={answer} />}
+          {current && (
+            <SwipeCard
+              key={`${media}:${current.id}`}
+              title={current}
+              rightLabel="Loved it"
+              leftLabel="Not for me"
+              onSwipe={(dir) => answer(dir === 'right' ? 'loved' : 'disliked')}
+            />
+          )}
         </AnimatePresence>
       </div>
 
@@ -152,71 +159,6 @@ function useDeck(media) {
     queryFn: ({ pageParam }) => callTmdb('discover', { media, sort_by: 'vote_count.desc', page: pageParam }),
     getNextPageParam: (last) => (last.page < Math.min(last.total_pages, 25) ? last.page + 1 : undefined),
   });
-}
-
-const exitVariants = {
-  exit: (direction) => ({ x: direction * 480, y: direction === 0 ? 480 : 0, rotate: direction * 18, opacity: 0, transition: { duration: 0.28 } }),
-};
-
-function SwipeCard({ title, onAnswer }) {
-  const x = useMotionValue(0);
-  const rotate = useTransform(x, [-240, 240], [-14, 14]);
-  const lovedOpacity = useTransform(x, [30, SWIPE_DISTANCE], [0, 1]);
-  const dislikedOpacity = useTransform(x, [-SWIPE_DISTANCE, -30], [1, 0]);
-
-  return (
-    <motion.div
-      className="absolute inset-0 cursor-grab touch-none active:cursor-grabbing"
-      style={{ x, rotate }}
-      drag="x"
-      dragSnapToOrigin
-      dragElastic={0.9}
-      onDragEnd={(_e, info) => {
-        const fling = info.offset.x + info.velocity.x * 0.2;
-        if (fling > SWIPE_DISTANCE) onAnswer('loved');
-        else if (fling < -SWIPE_DISTANCE) onAnswer('disliked');
-      }}
-      initial={{ scale: 0.95 }}
-      animate={{ scale: 1 }}
-      variants={exitVariants}
-      exit="exit"
-    >
-      <Poster title={title} />
-      <motion.span style={{ opacity: lovedOpacity }} className="pointer-events-none absolute left-4 top-4 rotate-[-12deg] rounded-lg border-2 border-emerald-400 px-2 py-1 text-lg font-bold uppercase text-emerald-300">
-        Loved it
-      </motion.span>
-      <motion.span style={{ opacity: dislikedOpacity }} className="pointer-events-none absolute right-4 top-4 rotate-[12deg] rounded-lg border-2 border-rose-400 px-2 py-1 text-lg font-bold uppercase text-rose-300">
-        Not for me
-      </motion.span>
-    </motion.div>
-  );
-}
-
-function Poster({ title, className, caption = true }) {
-  return (
-    <div className={cn('relative h-full w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-900 shadow-2xl', className)}>
-      {title.poster_path ? (
-        <img
-          src={tmdbImage(title.poster_path, 'w500')}
-          srcSet={posterSrcSet(title.poster_path)}
-          sizes="(min-width: 448px) 400px, 90vw"
-          alt={`${title.title} poster`}
-          draggable={false}
-          className="h-full w-full select-none object-cover"
-        />
-      ) : (
-        <span className="flex h-full items-center justify-center"><Film className="h-10 w-10 text-slate-600" aria-hidden="true" /></span>
-      )}
-      {caption && (
-        <div className="absolute inset-x-0 bottom-0 rounded-b-3xl bg-gradient-to-t from-slate-950 via-slate-950/80 to-transparent p-5 pt-16">
-          <p className="font-display text-xl font-semibold text-white">{title.title}</p>
-          <p className="mt-0.5 text-sm text-slate-300">
-            {[releaseYear(title.release_date), title.genres?.slice(0, 2).map((g) => g.name).join(' · ')].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-      )}
-    </div>
-  );
 }
 
 const TONES = {
