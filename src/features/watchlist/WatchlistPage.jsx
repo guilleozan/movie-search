@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, CalendarClock, Eye, History, Pencil, X } from 'lucide-react';
+import { Bookmark, CalendarClock, Eye, History, Pencil, Tv, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import ErrorBox from '@/components/ErrorBox';
@@ -62,7 +62,7 @@ export default function WatchlistPage() {
           upcoming: item.status === 'want_to_watch' && !!release && release > today,
         };
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailsFor reads these two
+     
     [items, movies.data, series.data, country, today]
   );
 
@@ -107,12 +107,20 @@ export default function WatchlistPage() {
             <h1 className="font-display text-3xl font-semibold tracking-tight text-white">Watchlist</h1>
             <p className="mt-1 text-sm text-slate-400">Films and series you've saved, and what you've watched.</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <Link
+            to="/services"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-white/20"
+          >
+            <Tv className="h-3.5 w-3.5" aria-hidden="true" /> Which services?
+          </Link>
           <Link
             to="/seen"
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-white/20"
           >
             <History className="h-3.5 w-3.5" aria-hidden="true" /> Add what you've watched
           </Link>
+          </div>
         </div>
       </div>
 

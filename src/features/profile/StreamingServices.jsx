@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -106,7 +107,10 @@ export default function StreamingServices({ profile }) {
               {showAll ? 'Show fewer' : `Show all ${list.length} services`}
             </button>
           )}
-          <p className="mt-3 text-xs text-slate-500">Streaming data from JustWatch via TMDB.</p>
+          <p className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+            <span>Streaming data from JustWatch via TMDB.</span>
+            <Link to="/services" className="text-sm text-amber-300 hover:underline">Which ones should I keep? →</Link>
+          </p>
         </>
       )}
     </section>
