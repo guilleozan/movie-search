@@ -23,6 +23,7 @@ import MovieDetailPage from '@/features/movies/MovieDetailPage';
 import ProfilePage from '@/features/profile/ProfilePage';
 import SeenPage from '@/features/history/SeenPage';
 import SwipePage from '@/features/history/SwipePage';
+import AlertsPage from '@/features/alerts/AlertsPage';
 import ServicesPage from '@/features/services/ServicesPage';
 
 function App() {
@@ -56,6 +57,7 @@ function App() {
                   <Route path="/seen" element={<SeenPage />} />
                   <Route path="/services" element={<ServicesPage />} />
                   <Route path="/swipe" element={<SwipePage />} />
+                  <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>

@@ -114,6 +114,25 @@ LLM_API_KEY=<key>
 - **Netflix import**: upload the CSV from Netflix's *Viewing activity → Download all*. It is parsed in the browser; titles are matched with the `tmdb` function's `match` op, which only accepts confident matches. The user reviews the list before anything is saved, and each title keeps its last watch date.
 - **Streaming services** (profile): the services the user pays for (`profiles.streaming_services`, TMDB provider ids). Recommendations rank titles on them higher and show "On Neon", "On Netflix", etc.
 
+## Alerts
+
+The `alerts` Edge Function tells users when something on their watchlist becomes available: it lands on one of their streaming services, opens in cinemas in their country this week, or a series they're watching has a new episode. Alerts appear under the bell (`/alerts`). A user's first check only records what's already true, so they're told about changes, not everything at once.
+
+It runs two ways:
+
+- **When the app opens** (at most every 6 hours per device, 30 minutes per user on the server), for that user.
+- **Daily at 18:00 UTC** (early morning in NZ) for everyone, through `pg_cron` + `pg_net` (see the alerts migration). The job needs the function URL and a shared secret in Vault, once per environment:
+
+  ```sql
+  -- Hosted: Project URL. Local: http://supabase_kong_cinematch:8000
+  select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+  select vault.create_secret('<a long random string>', 'alerts_secret');
+  ```
+
+  Set the same string as the function's `ALERTS_SECRET` secret (`supabase/functions/.env` locally). `alerts` has the gateway's JWT check turned off in `supabase/config.toml`, because the cron call has no user token; the function checks the secret or the user itself.
+
+**Email** (optional): users can turn on "Email alerts" in their profile. Emails are sent through [Resend](https://resend.com) only when `RESEND_API_KEY`, `EMAIL_FROM` and `APP_URL` are set. Push notifications need the installable app, which comes with deploying.
+
 ## Location, cinemas and showtimes
 
 - **Location**: "Use my location" (browser geolocation) or a town/city search, on Now Showing, the profile page and the Showtimes tab. Only the town, country and a position rounded to about 1 km are saved in `profiles`. The country drives TMDB region, certifications, release dates and where to watch.
@@ -142,6 +161,7 @@ OpenStreetMap's free services have usage policies: the function identifies the a
    npx supabase functions deploy tmdb
    npx supabase functions deploy recommend
    npx supabase functions deploy showtimes
+   npx supabase functions deploy alerts   # then add the Vault secrets from "Alerts"
    # optional, for LLM-written picks (see "Recommendations"):
    npx supabase secrets set LLM_PROVIDER=anthropic LLM_MODEL=claude-opus-5 LLM_API_KEY=<key>
    ```

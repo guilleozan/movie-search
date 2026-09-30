@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, Link, useNavigate } from 'react-router-dom';
-import { Clapperboard, Bookmark, Compass, Ticket, LogOut, Search, UserRound } from 'lucide-react';
+import { Bell, Clapperboard, Bookmark, Compass, Ticket, LogOut, Search, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
 import Footer from '@/components/Footer';
 import SearchDialog from '@/features/movies/SearchDialog';
 import MobileTopBar from '@/components/MobileTopBar';
+import { useAlertsCheck, useUnreadCount } from '@/features/alerts/hooks';
 
 const navItems = [
   { to: '/', label: 'Discover', icon: Compass, end: true },
@@ -22,6 +23,8 @@ export default function Layout() {
   const { data: profile } = useProfile();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const unread = useUnreadCount();
+  useAlertsCheck();
 
   // "/" or Cmd/Ctrl+K opens search, unless the user is typing in a field.
   useEffect(() => {
@@ -80,6 +83,23 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
+          <NavLink
+            to="/alerts"
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
+              )
+            }
+          >
+            <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
+            Alerts
+            {unread > 0 && (
+              <span className="ml-auto rounded-full bg-amber-400 px-1.5 text-[11px] font-semibold text-slate-950">
+                {unread}<span className="sr-only"> unread</span>
+              </span>
+            )}
+          </NavLink>
         </nav>
         <div className="mt-auto border-t border-white/5 px-3 py-4">
           <NavLink
@@ -106,7 +126,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <MobileTopBar />
+      <MobileTopBar unread={unread} />
 
       <main className="flex min-h-screen flex-1 min-w-0 flex-col pt-14 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0">
         <Outlet />

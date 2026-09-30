@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { History, LogOut, MapPin, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import ErrorBox from '@/components/ErrorBox';
 import { supabase } from '@/lib/supabase';
@@ -47,6 +48,7 @@ export default function ProfilePage() {
         {profile.isSuccess && <DetailsForm key={profile.data.country_code} profile={profile.data} />}
         {profile.isSuccess && <LocationSection profile={profile.data} />}
         {profile.isSuccess && <StreamingServices profile={profile.data} />}
+        {profile.isSuccess && <EmailAlerts profile={profile.data} />}
 
         <TasteSection />
 
@@ -138,6 +140,32 @@ function DetailsForm({ profile }) {
         <Button type="submit" disabled={!dirty || save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button>
       </div>
     </form>
+  );
+}
+
+function EmailAlerts({ profile }) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: async (email_alerts) => {
+      const { error } = await supabase.from('profiles').update({ email_alerts }).eq('id', profile.id);
+      if (error) throw error;
+      return email_alerts;
+    },
+    onSuccess: (email_alerts) => queryClient.setQueryData(['profile', profile.id], (p) => p && { ...p, email_alerts }),
+    onError: (error) => toast({ variant: 'destructive', title: "Couldn't save that", description: error.message }),
+  });
+  const on = save.isPending ? save.variables : profile.email_alerts;
+  return (
+    <section aria-labelledby="alerts-heading" className="flex items-start justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.03] p-5 sm:p-6">
+      <div>
+        <h2 id="alerts-heading" className="font-display text-lg font-semibold text-white">Email alerts</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Get an email when something on your watchlist lands on your services, opens in cinemas, or has a new episode.
+          Alerts always show under <Link to="/alerts" className="text-amber-300 hover:underline">Alerts</Link>.
+        </p>
+      </div>
+      <Switch checked={on} onCheckedChange={(v) => save.mutate(v)} aria-label="Email alerts" className="mt-1 shrink-0" />
+    </section>
   );
 }
 

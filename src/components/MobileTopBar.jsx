@@ -1,17 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Clapperboard, Loader2, Search, X } from 'lucide-react';
+import { Bell, Clapperboard, Loader2, Search, X } from 'lucide-react';
 import SearchResults, { useSearchResults } from '@/features/movies/SearchResults';
 import { titlePath } from '@/lib/tmdb';
 
 const EASE = [0.32, 0.72, 0, 1];
 
 /**
- * Mobile top bar: the logo, and a search icon that expands into a search field
- * across the bar, with results in a panel below it.
+ * Mobile top bar: the logo, the alerts bell, and a search icon that expands into
+ * a search field across the bar, with results in a panel below it.
+ *
+ * @param {{ unread: number }} props
  */
-export default function MobileTopBar() {
+export default function MobileTopBar({ unread = 0 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const search = useSearchResults(query);
@@ -59,6 +61,20 @@ export default function MobileTopBar() {
             <span className="font-display text-base font-semibold tracking-tight">CineMatch</span>
           </Link>
         </motion.div>
+
+        <Link
+          to="/alerts"
+          aria-label={unread ? `Alerts, ${unread} unread` : 'Alerts'}
+          tabIndex={open ? -1 : 0}
+          className={`absolute right-14 top-2.5 flex h-9 w-9 items-center justify-center text-slate-300 transition-opacity hover:text-white ${open ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+        >
+          <Bell className="h-5 w-5" aria-hidden="true" />
+          {unread > 0 && (
+            <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-amber-400 px-1 text-center text-[10px] font-bold leading-4 text-slate-950" aria-hidden="true">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+        </Link>
 
         {/* A CSS transition, not framer-motion: it can interpolate rem -> calc(%). */}
         <form
