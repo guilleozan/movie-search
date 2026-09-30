@@ -12,7 +12,7 @@ import { useMovieSearch } from '@/features/movies/hooks';
 import { useRemoveWatchlistItem, useSaveWatchlistItem, useWatchlist, useWatchlistItem } from '@/features/watchlist/hooks';
 import { RatingInput } from '@/features/watchlist/RatingInput';
 import PlatformSelect from '@/features/watchlist/PlatformSelect';
-import NetflixImport from '@/features/history/NetflixImport';
+import HistoryImport from '@/features/history/HistoryImport';
 
 const CARD_SIZES = '(min-width: 1024px) 200px, (min-width: 640px) 33vw, 50vw';
 
@@ -46,13 +46,13 @@ export default function SeenPage() {
       <details className="group mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-5 sm:p-6">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <span>
-            <span className="block font-display text-lg font-semibold text-white">Import from Netflix</span>
-            <span className="block text-sm text-slate-400">Add everything you've watched there in one go.</span>
+            <span className="block font-display text-lg font-semibold text-white">Import from Netflix, Letterboxd or IMDb</span>
+            <span className="block text-sm text-slate-400">Add everything you've watched (and rated) there in one go.</span>
           </span>
           <ChevronDown className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
         </summary>
         <div className="mt-5">
-          <NetflixImport />
+          <HistoryImport />
         </div>
       </details>
 

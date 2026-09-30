@@ -139,22 +139,31 @@ export function useRemoveWatchlistItem() {
 
 /**
  * Add many watched titles at once (viewing-history import). Existing rows become
- * "watched" and keep their rating and notes. Rows need identical keys, because a
- * bulk upsert fills missing columns with null.
+ * "watched" and keep their notes. A bulk upsert fills missing columns with null,
+ * so rows are sent in two groups with identical keys: with a rating, and without
+ * one (which then keeps any rating already saved).
  *
- * Variables: { rows: { tmdb_id, media_type, watched_on, watched_at }[] }
+ * Variables: { rows: { tmdb_id, media_type, watched_on?, watched_at?, rating? }[] }
  */
 export function useImportHistory() {
   const queryClient = useQueryClient();
   const queryKey = useWatchlistKey();
   return useMutation({
     mutationFn: async ({ rows }) => {
-      for (let i = 0; i < rows.length; i += 100) {
-        const chunk = rows.slice(i, i + 100).map(({ tmdb_id, media_type, watched_on = null, watched_at = null }) => ({
-          tmdb_id, media_type, status: 'watched', watched_on, watched_at,
-        }));
-        const { error } = await supabase.from('watchlist_items').upsert(chunk, { onConflict: 'user_id,media_type,tmdb_id' });
-        if (error) throw error;
+      const base = ({ tmdb_id, media_type, watched_on = null, watched_at = null }) => ({
+        tmdb_id, media_type, status: 'watched', watched_on, watched_at,
+      });
+      const groups = [
+        rows.filter((r) => r.rating).map((r) => ({ ...base(r), rating: r.rating })),
+        rows.filter((r) => !r.rating).map(base),
+      ];
+      for (const group of groups) {
+        for (let i = 0; i < group.length; i += 100) {
+          const { error } = await supabase
+            .from('watchlist_items')
+            .upsert(group.slice(i, i + 100), { onConflict: 'user_id,media_type,tmdb_id' });
+          if (error) throw error;
+        }
       }
       return rows.length;
     },

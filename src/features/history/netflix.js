@@ -89,7 +89,7 @@ function localNoon(year, month, day) {
 }
 
 /** Minimal RFC 4180 CSV: quoted fields, escaped quotes, commas and newlines inside quotes. */
-function parseCsv(text) {
+export function parseCsv(text) {
   const rows = [];
   let row = [];
   let field = '';

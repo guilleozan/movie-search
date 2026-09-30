@@ -7,19 +7,59 @@ import { callTmdb, releaseYear } from '@/lib/tmdb';
 import { tmdbImage } from '@/lib/tmdb-images';
 import { useCountry } from '@/features/movies/hooks';
 import { useImportHistory, useWatchlist } from '@/features/watchlist/hooks';
-import { parseNetflixCsv } from '@/features/history/netflix';
+import { parseHistoryFiles, SOURCES } from '@/features/history/imports';
 
 // Unique titles matched per import: the most recent ones. Keeps a very long
 // history from taking minutes to match.
 const MAX_TITLES = 600;
 const BATCH = 25;
 
+const INSTRUCTIONS = {
+  netflix: (
+    <>
+      <li>
+        On netflix.com open{' '}
+        <a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:underline">
+          Account → Profile → Viewing activity
+        </a>
+        .
+      </li>
+      <li>Scroll to the bottom and choose <strong>Download all</strong>. You get a CSV file.</li>
+    </>
+  ),
+  letterboxd: (
+    <>
+      <li>
+        On letterboxd.com open{' '}
+        <a href="https://letterboxd.com/settings/data/" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:underline">
+          Settings → Data → Export your data
+        </a>{' '}
+        and unzip the file.
+      </li>
+      <li>Choose <strong>ratings.csv</strong> and <strong>watched.csv</strong> (or <strong>diary.csv</strong>). You can pick several at once.</li>
+    </>
+  ),
+  imdb: (
+    <>
+      <li>
+        On imdb.com open{' '}
+        <a href="https://www.imdb.com/list/ratings" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:underline">
+          Your ratings
+        </a>
+        , then the ⋯ menu → <strong>Export</strong>.
+      </li>
+      <li>Download the CSV when it's ready (IMDb emails a link or lists it under Exports).</li>
+    </>
+  ),
+};
+
 /**
- * Import Netflix viewing history: parse the CSV in the browser, match each title to
- * TMDB (the `match` op only accepts confident matches), let the user review, then
- * add the chosen ones as watched on Netflix with their last watch date.
+ * Import viewing history from Netflix, Letterboxd or IMDb: parse the CSV in the
+ * browser, match each title to TMDB (IMDb ids exactly; otherwise the confident-only
+ * `match` op, with the year when the file has one), let the user review, then add
+ * the chosen ones as watched with their date and rating.
  */
-export default function NetflixImport() {
+export default function HistoryImport() {
   const country = useCountry();
   const watchlist = useWatchlist();
   const importHistory = useImportHistory();
@@ -31,19 +71,21 @@ export default function NetflixImport() {
   const [unmatched, setUnmatched] = useState([]);
   const [chosen, setChosen] = useState(() => new Set());
   const [error, setError] = useState('');
+  const [source, setSource] = useState('netflix');
 
   const alreadyWatched = useMemo(
     () => new Set((watchlist.data ?? []).filter((i) => i.status === 'watched').map((i) => `${i.media_type}:${i.tmdb_id}`)),
     [watchlist.data]
   );
 
-  const onFile = async (file) => {
+  const onFiles = async (files) => {
     setError('');
     try {
-      const { titles, rows } = parseNetflixCsv(await file.text(), country);
+      const { source: detected, titles, rows } = parseHistoryFiles(await Promise.all([...files].map((f) => f.text())), country);
       if (titles.length === 0) throw new Error('No titles found in that file.');
+      setSource(detected);
       const kept = titles.slice(0, MAX_TITLES).filter((t) => t.name.length <= 200);
-      setParsed({ rows, titles: kept, skipped: titles.length - kept.length });
+      setParsed({ rows, titles: kept, skipped: titles.length - kept.length, source: detected });
       setPhase('matching');
       await match(kept);
     } catch (err) {
@@ -54,45 +96,57 @@ export default function NetflixImport() {
 
   const match = async (titles) => {
     const found = new Map(); // title key -> TMDB summary
+    const byImdb = titles.filter((t) => t.imdbId);
+    const byName = titles.filter((t) => !t.imdbId);
     const passes = [
-      { list: titles.filter((t) => t.media === 'movie'), media: 'movie', name: (t) => t.name },
-      { list: titles.filter((t) => t.media === 'tv'), media: 'tv', name: (t) => t.name },
+      { list: byName.filter((t) => t.media === 'movie'), media: 'movie' },
+      { list: byName.filter((t) => t.media === 'tv'), media: 'tv' },
     ];
     // Retry what didn't match under its alternative name, as a series.
-    const retry = () => titles.filter((t) => !found.has(t.key) && t.alt);
+    const retry = () => byName.filter((t) => !found.has(t.key) && t.alt);
     const batches = (list) => Math.ceil(list.length / BATCH);
     let done = 0;
-    let total = passes.reduce((n, p) => n + batches(p.list), 0);
+    let total = batches(byImdb) + passes.reduce((n, p) => n + batches(p.list), 0);
     setProgress({ done, total });
+    const tick = () => setProgress({ done: ++done, total });
 
-    const run = async (list, media, name) => {
+    for (let i = 0; i < byImdb.length; i += BATCH) {
+      const chunk = byImdb.slice(i, i + BATCH);
+      const { results } = await callTmdb('find_imdb', { ids: chunk.map((t) => t.imdbId) });
+      results.forEach((r, j) => r.match && found.set(chunk[j].key, r.match));
+      tick();
+    }
+    const run = async (list, media, useAlt = false) => {
       for (let i = 0; i < list.length; i += BATCH) {
         const chunk = list.slice(i, i + BATCH);
-        const { results } = await callTmdb('match', { media, titles: chunk.map(name) });
+        const { results } = await callTmdb('match', {
+          media,
+          titles: chunk.map((t) => (useAlt ? t.alt : t.year ? { title: t.name, year: t.year } : t.name)),
+        });
         results.forEach((r, j) => r.match && found.set(chunk[j].key, { ...r.match, media_type: media }));
-        done += 1;
-        setProgress({ done, total });
+        tick();
       }
     };
-    for (const p of passes) await run(p.list, p.media, p.name);
+    for (const p of passes) await run(p.list, p.media);
     const second = retry();
     total += batches(second);
-    await run(second, 'tv', (t) => t.alt);
+    await run(second, 'tv', true);
 
-    // Several Netflix names can land on the same title (e.g. "Stranger Things 3" and "4").
+    // Several names can land on the same title (e.g. "Stranger Things 3" and "4").
     const grouped = new Map();
     for (const t of titles) {
       const m = found.get(t.key);
       if (!m) continue;
       const key = `${m.media_type}:${m.id}`;
-      const g = grouped.get(key) ?? { key, movie: m, count: 0, lastWatched: null };
+      const g = grouped.get(key) ?? { key, movie: m, count: 0, lastWatched: null, rating: null };
       g.count += t.count;
+      g.rating ??= t.rating ?? null;
       if (t.lastWatched && (!g.lastWatched || t.lastWatched > g.lastWatched)) g.lastWatched = t.lastWatched;
       grouped.set(key, g);
     }
     const list = [...grouped.values()].sort((a, b) => (b.lastWatched ?? '').localeCompare(a.lastWatched ?? ''));
     setMatches(list);
-    setUnmatched(titles.filter((t) => !found.has(t.key)).map((t) => t.name));
+    setUnmatched(titles.filter((t) => !found.has(t.key)).map((t) => (t.year ? `${t.name} (${t.year})` : t.name)));
     setChosen(new Set(list.filter((g) => !alreadyWatched.has(g.key)).map((g) => g.key)));
     setPhase('review');
   };
@@ -108,7 +162,13 @@ export default function NetflixImport() {
   const confirm = () => {
     const rows = matches
       .filter((g) => chosen.has(g.key))
-      .map((g) => ({ tmdb_id: g.movie.id, media_type: g.movie.media_type, watched_on: 'Netflix', watched_at: g.lastWatched }));
+      .map((g) => ({
+        tmdb_id: g.movie.id,
+        media_type: g.movie.media_type,
+        watched_on: SOURCES[parsed.source].watchedOn,
+        watched_at: g.lastWatched,
+        rating: g.rating,
+      }));
     importHistory.mutate(
       { rows },
       {
@@ -133,26 +193,33 @@ export default function NetflixImport() {
     <div>
       {phase === 'idle' && (
         <>
+          <div className="mb-4 flex w-fit gap-1 rounded-xl border border-white/10 bg-white/5 p-1" role="group" aria-label="Import from">
+            {Object.entries(SOURCES).map(([id, { label }]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={source === id}
+                onClick={() => setSource(id)}
+                className={cn('rounded-lg px-3 py-1.5 text-sm font-medium transition-colors', source === id ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-100')}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-300">
-            <li>
-              On netflix.com open{' '}
-              <a href="https://www.netflix.com/viewingactivity" target="_blank" rel="noopener noreferrer" className="text-amber-300 hover:underline">
-                Account → Profile → Viewing activity
-              </a>
-              .
-            </li>
-            <li>Scroll to the bottom and choose <strong>Download all</strong>. You get a CSV file.</li>
-            <li>Choose that file here. It is read on your device; only the titles are looked up.</li>
+            {INSTRUCTIONS[source]}
+            <li>Choose the file here. It is read on your device; only the titles are looked up.</li>
           </ol>
           <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 focus-within:ring-2 focus-within:ring-amber-400 focus-within:ring-offset-2 focus-within:ring-offset-slate-950">
             <input
               ref={fileRef}
               type="file"
               accept=".csv,text/csv"
+              multiple
               className="sr-only"
-              onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+              onChange={(e) => e.target.files?.length && onFiles(e.target.files)}
             />
-            <FileUp className="h-4 w-4" aria-hidden="true" /> Choose Netflix CSV
+            <FileUp className="h-4 w-4" aria-hidden="true" /> Choose {SOURCES[source].label} CSV
           </label>
           {error && <p className="mt-3 text-sm text-rose-300" role="alert">{error}</p>}
         </>
@@ -176,7 +243,7 @@ export default function NetflixImport() {
       {phase === 'review' && (
         <div>
           <p className="text-sm text-slate-300">
-            Found <strong>{matches.length}</strong> titles from {parsed.rows} things watched.
+            Found <strong>{matches.length}</strong> titles from {parsed.rows} rows in your {SOURCES[parsed.source].label} file.
             {unmatched.length > 0 && ` ${unmatched.length} couldn't be matched and are left out.`}
             {parsed.skipped > 0 && ` Only your ${MAX_TITLES} most recent titles were checked.`}
           </p>
@@ -210,7 +277,8 @@ export default function NetflixImport() {
                         {g.movie.title} <span className="text-slate-500">({releaseYear(g.movie.release_date) || 'n/a'})</span>
                       </span>
                       <span className="block text-xs text-slate-500">
-                        {g.movie.media_type === 'tv' ? `Series · ${g.count} episode${g.count > 1 ? 's' : ''}` : 'Film'}
+                        {g.movie.media_type === 'tv' ? (parsed.source === 'netflix' ? `Series · ${g.count} episode${g.count > 1 ? 's' : ''}` : 'Series') : 'Film'}
+                        {g.rating && ` · ${'★'.repeat(g.rating)}`}
                         {g.lastWatched && ` · last watched ${new Date(g.lastWatched).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                         {alreadyWatched.has(g.key) && ' · already in your history'}
                       </span>

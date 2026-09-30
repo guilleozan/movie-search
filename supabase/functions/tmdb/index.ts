@@ -1,7 +1,7 @@
 // TMDB proxy. Keeps TMDB_READ_TOKEN server side, allows only whitelisted
 // operations, and caches responses in Postgres.
 //
-// Request:  POST { op: 'search' | 'movie' | 'tv' | 'discover' | 'now_playing' | 'upcoming' | 'genres' | 'providers' | 'match', params?: {...} }
+// Request:  POST { op: 'search' | 'movie' | 'tv' | 'discover' | 'now_playing' | 'upcoming' | 'genres' | 'providers' | 'match' | 'find_imdb', params?: {...} }
 // Most ops take `media: 'movie' | 'tv'` (search also 'multi'); the default is 'movie'.
 // Response: JSON (shapes in ../_shared/tmdb.ts), or { error } with a 4xx/5xx status.
 
@@ -26,18 +26,48 @@ const OPERATIONS: Record<string, (params: Params) => Promise<unknown>> = {
   movie: (p) => details(p, 'movie'),
   tv: (p) => details(p, 'tv'),
 
-  // { titles: [...] (max 25), media } -> { results: [{ title, match }] }. For importing
-  // viewing history: a title matches only when exactly one of TMDB's results has
-  // the same normalised title, or several do and one is clearly the most popular.
+  // { titles: [title | { title, year }] (max 25), media } -> { results: [{ title, year, match }] }.
+  // For importing viewing history: a title matches only when exactly one of TMDB's
+  // results has the same normalised title (and year, when given), or several do and
+  // one is clearly the most popular.
   match: async (p) => {
     const media = mediaParam(p.media);
     if (!Array.isArray(p.titles) || p.titles.length === 0 || p.titles.length > 25) throw new HttpError(400, 'Invalid titles');
-    const titles = p.titles.map((t) => text(t, 'titles', 200));
+    const items = p.titles.map((t) => {
+      const obj = typeof t === 'string' ? { title: t } : (t ?? {}) as Params;
+      return {
+        title: text(obj.title, 'titles', 200),
+        year: obj.year === undefined || obj.year === null ? undefined : int(obj.year, 'year', 1870, 2100),
+      };
+    });
     const results = [];
-    for (let i = 0; i < titles.length; i += 5) {
-      results.push(...await Promise.all(titles.slice(i, i + 5).map(async (title) => {
+    for (let i = 0; i < items.length; i += 5) {
+      results.push(...await Promise.all(items.slice(i, i + 5).map(async ({ title, year }) => {
+        // TMDB's year filter is strict (release vs festival dates differ), so search
+        // without it and allow a year either side when comparing.
         const page = await search(title, media, 1);
-        return { title, match: bestMatch(title, page.results) };
+        return { title, year: year ?? null, match: bestMatch(title, page.results, year) };
+      })));
+    }
+    return { results };
+  },
+
+  // { ids: ['tt0111161', ...] (max 25) } -> { results: [{ imdb_id, match }] }: exact
+  // lookups for IMDb exports. Only movies and series are returned (not episodes).
+  find_imdb: async (p) => {
+    if (!Array.isArray(p.ids) || p.ids.length === 0 || p.ids.length > 25) throw new HttpError(400, 'Invalid ids');
+    const ids = p.ids.map((id) => match(id, /^tt\d{5,10}$/, 'ids'));
+    const [movieGenres, tvGenres] = await Promise.all([genreMap('movie'), genreMap('tv')]);
+    const results = [];
+    for (let i = 0; i < ids.length; i += 5) {
+      results.push(...await Promise.all(ids.slice(i, i + 5).map(async (imdbId) => {
+        const found = await cachedList(`find:${imdbId}`, REFERENCE_TTL, () =>
+          tmdbFetch(`/find/${imdbId}`, { external_source: 'imdb_id' }));
+        const raw = { results: [
+          ...(found.movie_results ?? []).map((m: any) => ({ ...m, media_type: 'movie' })),
+          ...(found.tv_results ?? []).map((m: any) => ({ ...m, media_type: 'tv' })),
+        ] };
+        return { imdb_id: imdbId, match: multiPage(raw, movieGenres, tvGenres).results[0] ?? null };
       })));
     }
     return { results };
@@ -138,9 +168,17 @@ async function details(p: Params, media: Media) {
 const normalise = (t: string) =>
   t.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
 
-/** The single confident match for `title`, or null (never a guess between equals). */
-function bestMatch(title: string, results: MovieSummary[]): MovieSummary | null {
-  const same = results.filter((r) => normalise(r.title) === normalise(title));
+/** Released within a year of `year` (release vs festival dates often differ by one). */
+function nearYear(r: MovieSummary, year: number | undefined): boolean {
+  if (!year) return true;
+  const y = Number((r.release_date ?? '').slice(0, 4));
+  return Number.isFinite(y) && Math.abs(y - year) <= 1;
+}
+
+/** The single confident match for `title` (and `year`), or null (never a guess between equals). */
+function bestMatch(title: string, results: MovieSummary[], year: number | undefined): MovieSummary | null {
+  const wanted = normalise(title);
+  const same = results.filter((r) => normalise(r.title) === wanted && nearYear(r, year));
   if (same.length === 0) return null;
   const [first, second] = [...same].sort((a, b) => b.vote_count - a.vote_count);
   // Remakes share titles: only pick the most popular when it clearly dominates.
