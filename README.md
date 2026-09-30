@@ -4,6 +4,30 @@ Movie recommendations, watchlist and local showtimes. React + Vite + Supabase.
 
 The rebuild plan (phases, data model, rules) is in [the brief below](#cinematch-v2-rebuild-brief). The audit of the original Base44 app is in [docs/AUDIT.md](docs/AUDIT.md).
 
+## Where we left off (1 October 2026)
+
+**`main` = v1.0.0** (tag `v1.0.0`): Phases 0–6 of the brief plus extras: series, watch history and imports (Netflix, Letterboxd, IMDb), Quick rate, series progress ("Up next"), the streaming services planner, cinemas and showtimes links, alerts, shared lists and movie night. It runs locally only; nothing is deployed yet.
+
+**Branch `feature/swipe`** (5 commits on top of v1.0.0, finished and tested, **not merged yet**):
+
+1. Services planner that counts the watchlist, series in progress and current picks, with prices per service and the monthly/yearly saving.
+2. "Keep or drop": swipe through your streaming services (`/services/swipe`).
+3. Swipe through your picks on Discover (Grid / Swipe toggle).
+4. Quick rate deals titles from your favourite genres and shows what it's learning.
+5. More specific recommendation reasons, and "Why you'd like it" on every title page.
+
+It adds a migration (`service_prices`), so run `npx supabase migration up` after switching to it.
+
+**Next steps**
+
+- Try `feature/swipe` (`git checkout feature/swipe`), then merge it into `main` if it's good.
+- Push the `v1.0.0` tag and the `feature/swipe` branch to GitHub (only `main` is pushed so far).
+- Optional: add `LLM_PROVIDER` / `LLM_MODEL` / `LLM_API_KEY` for AI-written reasons (see [Recommendations](#recommendations)), and a Resend key for alert emails (see [Alerts](#alerts)).
+- Choose a paid showtimes API only if real session times are needed ([docs/SHOWTIMES_PROVIDERS.md](docs/SHOWTIMES_PROVIDERS.md)); the free `links` provider (Flicks, Fandango, web search) works meanwhile.
+- Phase 7 (polish and deploy), deliberately left for last. Push notifications come with it.
+
+To start again: Docker Desktop, then `npx supabase start`, `npx supabase functions serve` and `npm run dev` (see below).
+
 ## Run locally
 
 Prerequisites: Node 20+ and Docker Desktop (running). The Supabase CLI is a dev dependency, so use it through `npx supabase`.
