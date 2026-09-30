@@ -22,6 +22,7 @@ import AuthCallback from '@/pages/AuthCallback';
 import MovieDetailPage from '@/features/movies/MovieDetailPage';
 import ProfilePage from '@/features/profile/ProfilePage';
 import SeenPage from '@/features/history/SeenPage';
+import SwipePage from '@/features/history/SwipePage';
 import ServicesPage from '@/features/services/ServicesPage';
 
 function App() {
@@ -54,6 +55,7 @@ function App() {
                   <Route path="/tv/:tmdbId" element={<MovieDetailPage key="tv" media="tv" />} />
                   <Route path="/seen" element={<SeenPage />} />
                   <Route path="/services" element={<ServicesPage />} />
+                  <Route path="/swipe" element={<SwipePage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>

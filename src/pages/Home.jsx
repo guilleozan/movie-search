@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { EyeOff, History, Loader2, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
+import { EyeOff, History, Layers, Loader2, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -124,9 +124,14 @@ function Picks({ answers }) {
           <p className="mt-2 text-sm text-slate-500">
             <span className="text-slate-400">Your taste:</span> {tasteSummary(answers)}
           </p>
-          <Link to="/seen" className="mt-1 inline-flex items-center gap-1 text-sm text-amber-300 hover:underline">
-            <History className="h-3.5 w-3.5" aria-hidden="true" /> Tell us what you've watched for better picks
-          </Link>
+          <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <Link to="/swipe" className="inline-flex items-center gap-1 text-amber-300 hover:underline">
+              <Layers className="h-3.5 w-3.5" aria-hidden="true" /> Quick rate (2 min)
+            </Link>
+            <Link to="/seen" className="inline-flex items-center gap-1 text-amber-300 hover:underline">
+              <History className="h-3.5 w-3.5" aria-hidden="true" /> Add what you've watched
+            </Link>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button

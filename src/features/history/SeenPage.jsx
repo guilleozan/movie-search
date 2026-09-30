@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Check, ChevronDown, Eye, Film, Loader2, Search } from 'lucide-react';
+import { Check, ChevronDown, Eye, Film, Layers, Loader2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import ErrorBox from '@/components/ErrorBox';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -42,6 +42,9 @@ export default function SeenPage() {
         and you won't be recommended things you've already watched.
         {watchedCount > 0 && <> You've marked <Link to="/watchlist" className="text-amber-300 hover:underline">{watchedCount}</Link> so far.</>}
       </p>
+      <Link to="/swipe" className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:border-white/20">
+        <Layers className="h-3.5 w-3.5" aria-hidden="true" /> Faster: quick rate by swiping
+      </Link>
 
       <details className="group mt-6 rounded-2xl border border-white/5 bg-white/[0.03] p-5 sm:p-6">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
