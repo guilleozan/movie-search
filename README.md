@@ -44,7 +44,8 @@ The dev server always uses port 5173, because Supabase Auth redirects back to ex
 | `VITE_SUPABASE_ANON_KEY` | `.env.local` / hosting env | Supabase anon (public) key. Safe in the browser; RLS protects the data |
 | `TMDB_READ_TOKEN` | Supabase secret | TMDB v4 read token (Phase 2) |
 | `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY` | Supabase secrets | Recommendation reranker (optional, see [Recommendations](#recommendations)) |
-| `SHOWTIMES_PROVIDER`, `SHOWTIMES_API_KEY` | Supabase secrets | Showtimes adapter (Phase 5) |
+| `SHOWTIMES_PROVIDER`, `SHOWTIMES_API_KEY` | Supabase secrets | Showtimes adapter, default `links` (see [Location, cinemas and showtimes](#location-cinemas-and-showtimes)) |
+| `OSM_CONTACT` | Supabase secret (optional) | Contact sent to OpenStreetMap with each request |
 | `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`, `..._SECRET` | `supabase/.env` | Only to test Google sign-in against the local stack |
 
 Only `VITE_` variables reach the browser. Everything else stays in Supabase. Locally, Edge Function secrets go in `supabase/functions/.env`. Never commit `.env.local`, `supabase/.env` or `supabase/functions/.env`.
@@ -106,6 +107,15 @@ LLM_MODEL=claude-opus-5  # any model id from that provider
 LLM_API_KEY=<key>
 ```
 
+## Location, cinemas and showtimes
+
+- **Location**: "Use my location" (browser geolocation) or a town/city search, on Now Showing, the profile page and the Showtimes tab. Only the town, country and a position rounded to about 1 km are saved in `profiles`. The country drives TMDB region, certifications, release dates and where to watch.
+- **Cinemas near you** (Now Showing): cinemas within 15 km from [OpenStreetMap](https://www.openstreetmap.org/copyright), with their websites. Users can star cinemas (`favourite_cinemas`).
+- **Showtimes** (tab on the movie page): comes from the `showtimes` Edge Function, which uses whichever provider `SHOWTIMES_PROVIDER` names. The default, `links`, is free and needs no key: it links to the country's showtimes site (Flicks in NZ and Australia, Fandango in the US), a web search for "{film} showtimes {town}", and the user's starred cinemas.
+- **Real session times** need a paid API. The options, with pricing and what to ask about NZ coverage, are in [docs/SHOWTIMES_PROVIDERS.md](docs/SHOWTIMES_PROVIDERS.md). The adapter and a stub are ready in `supabase/functions/showtimes/providers/`.
+
+OpenStreetMap's free services have usage policies: the function identifies the app, stays under one request per second, and caches results in `places_cache` (cinemas 7 days, places 30 days). The UI credits "© OpenStreetMap contributors". Optionally set `OSM_CONTACT` (an email or URL) as a secret, so OSM can reach you if needed.
+
 ## Set up the hosted Supabase project
 
 1. Create a project at [supabase.com](https://supabase.com). Copy the **Project URL** and **anon key** from Project Settings → API into `.env.local` (and later into your hosting provider).
@@ -124,6 +134,7 @@ LLM_API_KEY=<key>
    npx supabase secrets set TMDB_READ_TOKEN=<your token>
    npx supabase functions deploy tmdb
    npx supabase functions deploy recommend
+   npx supabase functions deploy showtimes
    # optional, for LLM-written picks (see "Recommendations"):
    npx supabase secrets set LLM_PROVIDER=anthropic LLM_MODEL=claude-opus-5 LLM_API_KEY=<key>
    ```

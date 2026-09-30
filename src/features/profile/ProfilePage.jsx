@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { LogOut, Pencil } from 'lucide-react';
+import { LogOut, MapPin, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import ErrorBox from '@/components/ErrorBox';
@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
 import { countryName } from '@/lib/tmdb';
 import { useCountry, useMovies } from '@/features/movies/hooks';
+import LocationPicker from '@/features/cinemas/LocationPicker';
 import Quiz from '@/features/recommendations/Quiz';
 import { ERAS, GENRES, MOODS } from '@/features/recommendations/quiz-options';
 import { useQuizAnswers, useSaveQuizAnswers } from '@/features/recommendations/hooks';
@@ -40,7 +41,9 @@ export default function ProfilePage() {
       <div className="mt-8 space-y-6">
         {profile.isPending && <div className="h-48 animate-pulse rounded-2xl bg-white/5" />}
         {profile.isError && <ErrorBox message="Couldn't load your profile." onRetry={() => profile.refetch()} />}
-        {profile.isSuccess && <DetailsForm profile={profile.data} />}
+        {/* Keyed by country so the form picks up a country set from the location. */}
+        {profile.isSuccess && <DetailsForm key={profile.data.country_code} profile={profile.data} />}
+        {profile.isSuccess && <LocationSection profile={profile.data} />}
 
         <TasteSection />
 
@@ -122,6 +125,37 @@ function DetailsForm({ profile }) {
         <Button type="submit" disabled={!dirty || save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</Button>
       </div>
     </form>
+  );
+}
+
+function LocationSection({ profile }) {
+  const [editing, setEditing] = useState(false);
+  const hasLocation = profile.lat != null && profile.lng != null;
+
+  return (
+    <section aria-labelledby="location-heading" className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="location-heading" className="font-display text-lg font-semibold text-white">Location</h2>
+        {hasLocation && (
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:border-white/20"
+          >
+            {editing ? 'Cancel' : <><Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Change</>}
+          </button>
+        )}
+      </div>
+      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-400">
+        <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+        {hasLocation ? `${profile.city ?? 'Location set'}, ${countryName(profile.country_code)}` : 'Not set. Used for cinemas and showtimes near you.'}
+      </p>
+      {(editing || !hasLocation) && (
+        <div className="mt-4">
+          <LocationPicker onSaved={() => setEditing(false)} />
+        </div>
+      )}
+    </section>
   );
 }
 

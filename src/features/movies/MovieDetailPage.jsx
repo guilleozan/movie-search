@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { Play, Star, Film, ExternalLink, ArrowLeft, RefreshCw } from 'lucide-react';
 import MovieCard from '@/components/MovieCard';
 import { tmdbImage, posterSrcSet, backdropSrcSet } from '@/lib/tmdb-images';
-import { certificationFor, formatRuntime, pickTrailer, releaseYear } from '@/lib/tmdb';
+import { certificationFor, formatRuntime, pickTrailer, regionalReleaseDate, releaseYear, todayISO } from '@/lib/tmdb';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCountry, useMovie } from '@/features/movies/hooks';
 import TrailerModal from '@/features/movies/TrailerModal';
 import WatchProviders from '@/features/movies/WatchProviders';
 import WatchlistActions from '@/features/watchlist/WatchlistActions';
+import ShowtimesPanel from '@/features/cinemas/ShowtimesPanel';
 
 // Horizontal "More like this" row: cards are a fixed ~160px wide.
 const ROW_CARD_SIZES = '160px';
@@ -46,6 +48,7 @@ export default function MovieDetailPage() {
   const year = releaseYear(movie.release_date);
   const runtime = formatRuntime(movie.runtime);
   const more = movie.recommendations.length ? movie.recommendations : movie.similar;
+  const inCinemas = isInCinemas(regionalReleaseDate(movie, country));
 
   return (
     <article>
@@ -174,8 +177,20 @@ export default function MovieDetailPage() {
             )}
           </div>
 
-          <aside className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 self-start">
-            <WatchProviders watchProviders={movie.watch_providers} country={country} />
+          {/* Keyed by movie so the default tab resets when moving between movies. */}
+          <aside key={movie.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 self-start">
+            <Tabs defaultValue={inCinemas ? 'showtimes' : 'watch'}>
+              <TabsList className="grid h-10 w-full grid-cols-2 bg-white/5 text-slate-400">
+                <TabsTrigger value="watch" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Where to watch</TabsTrigger>
+                <TabsTrigger value="showtimes" className="data-[state=active]:bg-white/15 data-[state=active]:text-white">Showtimes</TabsTrigger>
+              </TabsList>
+              <TabsContent value="watch" className="mt-5">
+                <WatchProviders watchProviders={movie.watch_providers} country={country} />
+              </TabsContent>
+              <TabsContent value="showtimes" className="mt-5">
+                <ShowtimesPanel movie={movie} country={country} inCinemas={inCinemas} />
+              </TabsContent>
+            </Tabs>
           </aside>
         </div>
 
@@ -196,6 +211,15 @@ export default function MovieDetailPage() {
       <TrailerModal video={trailer} open={trailerOpen} onOpenChange={setTrailerOpen} />
     </article>
   );
+}
+
+/** Released in cinemas in the last ~4 months, or opening within 2 weeks. */
+function isInCinemas(releaseDate) {
+  if (!releaseDate) return false;
+  const day = 24 * 60 * 60 * 1000;
+  const today = Date.parse(todayISO());
+  const release = Date.parse(releaseDate);
+  return release >= today - 120 * day && release <= today + 14 * day;
 }
 
 function NotFound() {

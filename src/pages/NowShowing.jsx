@@ -1,11 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Clapperboard, CalendarClock, RefreshCw } from 'lucide-react';
+import { Clapperboard, CalendarClock } from 'lucide-react';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
+import ErrorBox from '@/components/ErrorBox';
 import { countryName } from '@/lib/tmdb';
 import { useCountry, useReleaseList } from '@/features/movies/hooks';
+import CinemasNear from '@/features/cinemas/CinemasNear';
 
-// TMDB now_playing / upcoming for the user's country. Showtimes arrive in Phase 5.
+// Cinemas near the user, then TMDB now_playing / upcoming for their country.
 export default function NowShowing() {
   const country = useCountry();
   const nowPlaying = useReleaseList('now_playing', country);
@@ -21,9 +23,11 @@ export default function NowShowing() {
           In cinemas & coming soon
         </h1>
         <p className="mt-2 text-slate-400 max-w-md">
-          What's playing right now and what's headed to the big screen. Bookmark anything you want to catch.
+          Cinemas near you, what's playing right now and what's headed to the big screen. Bookmark anything you want to catch.
         </p>
       </div>
+
+      <CinemasNear />
 
       <Section id="now-playing" icon={Clapperboard} title="In theaters now" query={nowPlaying} emptyText="No films listed as playing right now." />
       <div className="mt-12">
@@ -52,14 +56,7 @@ function Section({ id, icon: Icon, title, query, emptyText }) {
         </div>
       )}
 
-      {query.isError && (
-        <div className="rounded-2xl border border-white/5 bg-white/[0.03] py-10 text-center">
-          <p className="text-rose-300">{query.error.message}</p>
-          <button onClick={() => query.refetch()} className="mt-3 inline-flex items-center gap-1.5 text-sm text-amber-300 hover:underline">
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Try again
-          </button>
-        </div>
-      )}
+      {query.isError && <ErrorBox message={query.error.message} onRetry={() => query.refetch()} />}
 
       {query.isSuccess && movies.length === 0 && <p className="text-sm text-slate-500">{emptyText}</p>}
 
