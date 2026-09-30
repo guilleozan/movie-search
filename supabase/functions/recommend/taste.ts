@@ -49,7 +49,7 @@ export type TasteProfile = {
 export type WatchlistRow = {
   tmdb_id: number;
   media_type: Media;
-  status: 'want_to_watch' | 'watched';
+  status: 'want_to_watch' | 'watching' | 'watched';
   rating: number | null;
   reaction: 'loved' | 'fine' | 'not_for_me' | null;
 };
@@ -74,6 +74,8 @@ export function parseQuiz(raw: unknown): QuizAnswers | null {
  */
 function signal(row: WatchlistRow): number {
   if (row.status === 'want_to_watch') return 0.5;
+  // Still watching a series: they like it enough to keep going.
+  if (row.status === 'watching') return 1;
   let s = row.rating ? row.rating - 3 : 0;
   if (row.reaction === 'loved') s += 1.5;
   if (row.reaction === 'not_for_me') s -= 2;
@@ -88,7 +90,7 @@ export async function buildTasteProfile(
   watchlist: WatchlistRow[],
   genreNames: Map<number, string>,
 ): Promise<{ profile: TasteProfile; details: Map<string, MovieDetails> }> {
-  const watched = watchlist.filter((r) => r.status === 'watched');
+  const watched = watchlist.filter((r) => r.status === 'watched' || r.status === 'watching');
   const saved = watchlist.filter((r) => r.status === 'want_to_watch');
   if (!quiz && watchlist.length === 0) throw new HttpError(409, 'Take the quiz first');
 
@@ -123,6 +125,8 @@ export async function buildTasteProfile(
     if (!d || (row.media_type === 'movie' && favorites.includes(row.tmdb_id))) continue;
     const why = row.status === 'want_to_watch'
       ? 'on their watchlist'
+      : row.status === 'watching'
+      ? 'watching it now'
       : [row.rating && `rated ${row.rating}/5`, row.reaction === 'loved' && 'loved it', row.reaction === 'not_for_me' && 'not for them']
         .filter(Boolean).join(', ') || 'watched';
     scored.push([d, signal(row), why]);

@@ -149,6 +149,10 @@ async function details(p: Params, media: Media) {
         ...toSummary(d!),
         watch_providers: pickCountry(d!.watch_providers, country),
         release_dates: pickCountry(d!.release_dates, country),
+        // Series lists (watchlist "Up next") need episode data too.
+        ...(media === 'tv'
+          ? { status: d!.status, season_list: d!.season_list ?? [], next_episode: d!.next_episode ?? null, last_episode: d!.last_episode ?? null }
+          : {}),
       })),
     };
   }

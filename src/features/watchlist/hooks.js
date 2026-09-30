@@ -8,7 +8,9 @@ import { toast } from '@/components/ui/use-toast';
  * @property {string} id
  * @property {number} tmdb_id
  * @property {'movie' | 'tv'} media_type
- * @property {'want_to_watch' | 'watched'} status
+ * @property {'want_to_watch' | 'watching' | 'watched'} status 'watching': series in progress
+ * @property {number | null} progress_season last episode watched (series)
+ * @property {number | null} progress_episode
  * @property {number | null} rating 1-5
  * @property {'loved' | 'fine' | 'not_for_me' | null} reaction
  * @property {string | null} notes
@@ -23,7 +25,7 @@ export const REACTIONS = [
   { value: 'not_for_me', label: 'Not for me' },
 ];
 
-const COLUMNS = 'id, tmdb_id, media_type, status, rating, reaction, notes, added_at, watched_at, watched_on';
+const COLUMNS = 'id, tmdb_id, media_type, status, rating, reaction, notes, added_at, watched_at, watched_on, progress_season, progress_episode';
 
 function useWatchlistKey() {
   const { user } = useAuth();
@@ -112,6 +114,8 @@ export function useSaveWatchlistItem() {
         reaction: null,
         notes: null,
         watched_on: null,
+        progress_season: null,
+        progress_episode: null,
         added_at: now,
         watched_at: null,
         ...existing,
@@ -174,7 +178,9 @@ export function useImportHistory() {
   });
 }
 
+// Ratings and reactions only exist once watched (the database enforces it too).
 function normalise(fields) {
-  if (fields.status === 'want_to_watch') return { ...fields, rating: null, reaction: null };
+  if (fields.status === 'want_to_watch') return { ...fields, rating: null, reaction: null, progress_season: null, progress_episode: null };
+  if (fields.status === 'watching') return { ...fields, rating: null, reaction: null };
   return fields;
 }

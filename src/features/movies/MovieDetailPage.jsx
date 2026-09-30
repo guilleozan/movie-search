@@ -9,6 +9,7 @@ import { useCountry, useMovie } from '@/features/movies/hooks';
 import TrailerModal from '@/features/movies/TrailerModal';
 import WatchProviders from '@/features/movies/WatchProviders';
 import WatchlistActions from '@/features/watchlist/WatchlistActions';
+import SeriesProgress from '@/features/watchlist/SeriesProgress';
 import ShowtimesPanel from '@/features/cinemas/ShowtimesPanel';
 
 // Horizontal "More like this" row: cards are a fixed ~160px wide.
@@ -123,6 +124,7 @@ export default function MovieDetailPage({ media = 'movie' }) {
             <div className="mt-5">
               <WatchlistActions movie={movie} />
             </div>
+            {isSeries && <SeriesProgress series={movie} />}
             {trailer && (
               <div className="mt-4 flex flex-wrap items-center gap-4">
                 <button

@@ -21,7 +21,8 @@ export default function ServicesPage() {
   const country = useCountry();
   const { data: profile } = useProfile();
   const watchlist = useWatchlist();
-  const toWatch = (watchlist.data ?? []).filter((i) => i.status === 'want_to_watch');
+  // Still to watch, including series in progress (you need the service to finish them).
+  const toWatch = (watchlist.data ?? []).filter((i) => i.status !== 'watched');
   const movies = useMovies(toWatch.filter((i) => i.media_type !== 'tv').map((i) => i.tmdb_id), country);
   const series = useMovies(toWatch.filter((i) => i.media_type === 'tv').map((i) => i.tmdb_id), country, 'tv');
   const mine = useMemo(() => new Set((profile?.streaming_services ?? []).map(Number)), [profile]);

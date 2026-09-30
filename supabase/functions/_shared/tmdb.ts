@@ -75,7 +75,7 @@ export async function getDetails(ids: number[], media: Media = 'movie'): Promise
     .in('tmdb_id', ids);
   const found = new Map<number, MovieDetails>();
   for (const row of rows ?? []) {
-    if (Date.now() - Date.parse(row.fetched_at) < DETAILS_TTL) found.set(row.tmdb_id, row.data);
+    if (Date.now() - Date.parse(row.fetched_at) < detailsTtl(row.data)) found.set(row.tmdb_id, row.data);
   }
 
   const missing = ids.filter((id) => !found.has(id));
@@ -116,6 +116,17 @@ export async function getDetails(ids: number[], media: Media = 'movie'): Promise
   }
 
   return ids.map((id) => found.get(id) ?? null);
+}
+
+/**
+ * How long cached details stay fresh. Series still airing change weekly (new
+ * episodes, air dates), so they refresh daily; rows cached before season data
+ * was stored are refetched.
+ */
+function detailsTtl(d: MovieDetails): number {
+  if (d.media_type !== 'tv') return DETAILS_TTL;
+  if (!d.season_list) return 0;
+  return d.status === 'Returning Series' || d.status === 'In Production' ? 24 * HOUR : DETAILS_TTL;
 }
 
 /** /discover/movie or /discover/tv with already-validated filters. */
@@ -181,6 +192,8 @@ export type MovieSummary = {
   seasons?: number | null;
 };
 
+export type Episode = { season_number: number; episode_number: number; air_date: string | null; name: string };
+
 export type Provider = { provider_id: number; provider_name: string; logo_path: string | null; display_priority: number };
 
 export type MovieDetails = MovieSummary & {
@@ -193,6 +206,10 @@ export type MovieDetails = MovieSummary & {
   directors: { id: number; name: string }[];
   /** Series only: where it first aired (e.g. HBO). */
   networks?: { id: number; name: string }[];
+  /** Series only: seasons (specials excluded) and the latest / next episodes. */
+  season_list?: { season_number: number; episode_count: number; air_date: string | null; name: string }[];
+  next_episode?: Episode | null;
+  last_episode?: Episode | null;
   cast: { id: number; name: string; character: string; profile_path: string | null }[];
   videos: { key: string; name: string; type: string; official: boolean; published_at: string }[];
   /** By country code: TMDB watch page link plus providers per offer type. */
@@ -333,6 +350,11 @@ function compactTv(m: any, genres: Map<number, string>): MovieDetails {
     release_date: firstAir,
     runtime: m.episode_run_time?.[0] || m.last_episode_to_air?.runtime || null,
     seasons: m.number_of_seasons ?? null,
+    season_list: (m.seasons ?? [])
+      .filter((x: any) => x.season_number > 0 && x.episode_count > 0)
+      .map((x: any) => ({ season_number: x.season_number, episode_count: x.episode_count, air_date: x.air_date || null, name: x.name ?? '' })),
+    next_episode: episode(m.next_episode_to_air),
+    last_episode: episode(m.last_episode_to_air),
     genres: m.genres ?? [],
     vote_average: m.vote_average ?? 0,
     vote_count: m.vote_count ?? 0,
@@ -361,4 +383,8 @@ function compactTv(m: any, genres: Map<number, string>): MovieDetails {
     recommendations: (m.recommendations?.results ?? []).slice(0, 12).map((x: any) => listItem(x, genres, 'tv')),
     similar: (m.similar?.results ?? []).slice(0, 12).map((x: any) => listItem(x, genres, 'tv')),
   };
+}
+
+function episode(e: any): Episode | null {
+  return e ? { season_number: e.season_number, episode_number: e.episode_number, air_date: e.air_date || null, name: e.name ?? '' } : null;
 }

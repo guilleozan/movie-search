@@ -1,18 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, CalendarClock, Eye, History, Pencil, Tv, X } from 'lucide-react';
+import { Bookmark, CalendarClock, Check, Eye, History, Pencil, Play, Tv, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import ErrorBox from '@/components/ErrorBox';
 import { useCountry, useMovies } from '@/features/movies/hooks';
-import { countryName, formatReleaseDate, providersFor, regionalReleaseDate, todayISO } from '@/lib/tmdb';
-import { REACTIONS, useWatchlist } from '@/features/watchlist/hooks';
+import { countryName, formatReleaseDate, providersFor, regionalReleaseDate, titlePath, todayISO } from '@/lib/tmdb';
+import { REACTIONS, useSaveWatchlistItem, useWatchlist } from '@/features/watchlist/hooks';
+import { episodeLabel, nextEpisode, nextLine } from '@/features/watchlist/series';
+import { tmdbImage } from '@/lib/tmdb-images';
 import { RatingStars } from '@/features/watchlist/RatingInput';
 import MarkWatchedDialog from '@/features/watchlist/MarkWatchedDialog';
 
 const STATUSES = [
   { value: 'all', label: 'All' },
   { value: 'want_to_watch', label: 'Want to watch' },
+  { value: 'watching', label: 'Watching' },
   { value: 'watched', label: 'Watched' },
 ];
 
@@ -44,6 +47,7 @@ export default function WatchlistPage() {
   const [type, setType] = useState('all');
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [editing, setEditing] = useState(null); // { movie, item } for the dialog
+  const save = useSaveWatchlistItem();
 
   const today = todayISO();
 
@@ -74,6 +78,7 @@ export default function WatchlistPage() {
   const counts = {
     all: typed.length,
     want_to_watch: typed.filter((i) => i.status === 'want_to_watch').length,
+    watching: typed.filter((i) => i.status === 'watching').length,
     watched: typed.filter((i) => i.status === 'watched').length,
   };
 
@@ -92,6 +97,12 @@ export default function WatchlistPage() {
       return e.stream.some((p) => String(p.provider_id) === filters.streaming);
     })
     .sort(SORTERS[filters.sort]);
+
+  // Series in progress, ready-to-watch first, then by when the next episode airs.
+  const upNext = entries
+    .filter((e) => e.item.status === 'watching' && e.movie && ofType(e.item))
+    .map((e) => ({ ...e, next: nextEpisode(e.item, e.movie) }))
+    .sort((a, b) => Number(b.next?.aired ?? false) - Number(a.next?.aired ?? false) || (a.next?.airDate ?? '9').localeCompare(b.next?.airDate ?? '9'));
 
   const filtersActive = filters.genre || filters.streaming;
   const hasSeries = items.some((i) => i.media_type === 'tv');
@@ -148,6 +159,48 @@ export default function WatchlistPage() {
 
       {items.length > 0 && (
         <>
+          {upNext.length > 0 && status !== 'watched' && (
+            <section aria-labelledby="up-next" className="mb-8">
+              <div className="mb-4 flex items-center gap-2">
+                <Play className="h-5 w-5 text-amber-300" aria-hidden="true" />
+                <h2 id="up-next" className="font-display text-xl font-semibold text-white">Up next</h2>
+              </div>
+              <ul className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:px-0">
+                {upNext.map(({ item, movie, next }) => (
+                  <li key={item.tmdb_id} className="flex w-44 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03]">
+                    <Link to={titlePath(movie)} className="relative block aspect-video bg-slate-900">
+                      {movie.backdrop_path && (
+                        <img src={tmdbImage(movie.backdrop_path, 'w780')} alt="" loading="lazy" className="h-full w-full object-cover opacity-80" />
+                      )}
+                    </Link>
+                    <div className="flex flex-1 flex-col gap-2 p-3">
+                      <p className="line-clamp-1 text-sm font-semibold text-white">{movie.title}</p>
+                      <p className={cn('text-xs', next?.aired ? 'text-amber-200' : 'text-slate-400')}>{nextLine(next)}</p>
+                      {next?.aired && (
+                        <button
+                          type="button"
+                          onClick={() => save.mutate({ tmdb_id: item.tmdb_id, media_type: 'tv', status: 'watching', progress_season: next.season, progress_episode: next.episode })}
+                          className="mt-auto inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-medium text-slate-100 hover:border-white/25"
+                        >
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" /> Watched {episodeLabel(next.season, next.episode)}
+                        </button>
+                      )}
+                      {!next && (
+                        <button
+                          type="button"
+                          onClick={() => save.mutate({ tmdb_id: item.tmdb_id, media_type: 'tv', status: 'watched' })}
+                          className="mt-auto inline-flex items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-400 hover:bg-white/5 hover:text-white"
+                        >
+                          Mark as finished
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Status tabs */}
           <div role="tablist" aria-label="Filter by status" className="flex gap-1 overflow-x-auto rounded-xl border border-white/10 bg-white/5 p-1 w-fit max-w-full">
             {STATUSES.map((s) => (
@@ -265,6 +318,14 @@ export default function WatchlistPage() {
 }
 
 function StatusControls({ item, onEdit }) {
+  if (item.status === 'watching') {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-amber-200">
+        <Play className="h-3.5 w-3.5" aria-hidden="true" />
+        {item.progress_season ? `Watching · seen ${episodeLabel(item.progress_season, item.progress_episode)}` : 'Watching'}
+      </p>
+    );
+  }
   if (item.status === 'want_to_watch') {
     return (
       <button
