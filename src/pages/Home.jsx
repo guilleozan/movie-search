@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { EyeOff, Loader2, RefreshCw, SlidersHorizontal, Sparkles, Wand2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -9,7 +9,9 @@ import MovieCard, { MovieCardSkeleton } from '@/components/MovieCard';
 import ErrorBox from '@/components/ErrorBox';
 import { useCountry, useMovie } from '@/features/movies/hooks';
 import Quiz from '@/features/recommendations/Quiz';
-import { CONTEXTS } from '@/features/recommendations/quiz-options';
+import { CONTEXTS, ERAS, GENRES, MOODS } from '@/features/recommendations/quiz-options';
+import TasteEditor from '@/features/recommendations/TasteEditor';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   useDismissMovie, useQuizAnswers, useRecommendations, useRefreshRecommendations, useSaveQuizAnswers,
 } from '@/features/recommendations/hooks';
@@ -21,7 +23,7 @@ export default function Home() {
     <div className="mx-auto w-full max-w-6xl px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
       {quiz.isPending && <PicksSkeleton />}
       {quiz.isError && <ErrorBox message="Couldn't load your taste profile." onRetry={() => quiz.refetch()} />}
-      {quiz.isSuccess && (quiz.data ? <Picks /> : <FirstQuiz />)}
+      {quiz.isSuccess && (quiz.data ? <Picks answers={quiz.data.answers} /> : <FirstQuiz />)}
     </div>
   );
 }
@@ -58,7 +60,8 @@ function FirstQuiz() {
   );
 }
 
-function Picks() {
+function Picks({ answers }) {
+  const [editingTaste, setEditingTaste] = useState(false);
   const [params, setParams] = useSearchParams();
   const seedParam = Number(params.get('seed'));
   const seed = Number.isInteger(seedParam) && seedParam > 0 ? seedParam : null;
@@ -111,14 +114,18 @@ function Picks() {
               ? `${items.length} films matched to your taste. Tap the bookmark to save.`
               : 'Films matched to your taste, from real movie data.'}
           </p>
+          <p className="mt-2 text-sm text-slate-500">
+            <span className="text-slate-400">Your taste:</span> {tasteSummary(answers)}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to="/profile#taste"
+          <button
+            type="button"
+            onClick={() => setEditingTaste(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 transition-colors hover:border-white/20"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" /> Edit taste
-          </Link>
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" /> Adjust taste
+          </button>
           <button
             type="button"
             onClick={onRefresh}
@@ -180,7 +187,7 @@ function Picks() {
       {recs.isSuccess && items.length === 0 && (
         <p className="rounded-2xl border border-white/5 bg-white/[0.03] px-6 py-12 text-center text-sm text-slate-400">
           No new picks here right now. Try another occasion, or{' '}
-          <Link to="/profile#taste" className="text-amber-300 hover:underline">adjust your taste</Link>.
+          <button type="button" onClick={() => setEditingTaste(true)} className="text-amber-300 hover:underline">adjust your taste</button>.
         </p>
       )}
 
@@ -210,8 +217,31 @@ function Picks() {
           ))}
         </Grid>
       )}
+
+      <Sheet open={editingTaste} onOpenChange={setEditingTaste}>
+        <SheetContent className="w-full overflow-y-auto border-white/10 bg-slate-950 text-slate-100 sm:max-w-lg">
+          <SheetHeader className="mb-6 pr-6 text-left">
+            <SheetTitle className="text-white">Adjust your taste</SheetTitle>
+            <SheetDescription>Change anything, then save to get fresh picks.</SheetDescription>
+          </SheetHeader>
+          {/* Remounted on open so it starts from the saved answers. */}
+          {editingTaste && (
+            <TasteEditor initialAnswers={answers} onSaved={() => setEditingTaste(false)} onCancel={() => setEditingTaste(false)} />
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
+}
+
+/** "Drama, Thriller · Edge-of-seat thrilling · Mix it up" */
+function tasteSummary(answers) {
+  const label = (list, id) => list.find((x) => x.id === id)?.label;
+  return [
+    answers.genres.map((id) => label(GENRES, id)).filter(Boolean).join(', '),
+    label(MOODS, answers.mood),
+    label(ERAS, answers.era),
+  ].filter(Boolean).join(' · ');
 }
 
 function Grid({ children }) {

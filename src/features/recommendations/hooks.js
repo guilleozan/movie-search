@@ -67,13 +67,69 @@ const recommendationsKey = (userId, context, seed) => ['recommendations', userId
  */
 export function useRecommendations({ context, seed, enabled = true }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: recommendationsKey(user?.id, context, seed),
     enabled: !!user && enabled,
     staleTime: 30 * 60 * 1000,
     retry: retryServerErrors,
-    queryFn: () => fetchRecommendations({ context, seed }),
+    queryFn: async () => {
+      const set = await fetchRecommendations({ context, seed });
+      // The function rebuilds the taste profile when it makes a new set.
+      if (!set.cached) queryClient.invalidateQueries({ queryKey: ['taste-profile', user?.id] });
+      return set;
+    },
   });
+}
+
+/**
+ * Genre weights for scoring any list against the user's taste. Uses the profile the
+ * `recommend` function builds (which also learns from ratings), unless the quiz was
+ * changed after it was built; then the quiz genres alone. Null before the quiz.
+ *
+ * @returns {{ weights: Map<number, number>, top: Set<number>, disliked: Set<number> } | null}
+ */
+export function useTaste() {
+  const { user } = useAuth();
+  const quiz = useQuizAnswers();
+  const profile = useQuery({
+    queryKey: ['taste-profile', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('taste_profiles').select('profile, updated_at').maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  if (!quiz.data) return null;
+  const fresh = profile.data && profile.data.updated_at >= quiz.data.updated_at;
+  const genres = fresh
+    ? profile.data.profile.genres
+    : quiz.data.answers.genres.map((id) => ({ id, weight: 3 }));
+  const disliked = fresh ? profile.data.profile.disliked_genres.map((g) => g.id) : [];
+  return {
+    weights: new Map(genres.map((g) => [g.id, g.weight])),
+    top: new Set(genres.slice(0, 3).map((g) => g.id)),
+    disliked: new Set(disliked),
+  };
+}
+
+/**
+ * How well a movie fits the taste: genre fit (so films with many genres don't win
+ * by count), minus clashes. `good` marks films worth a "Good match" badge.
+ *
+ * @param {{ genres: { id: number }[] }} movie
+ * @param {NonNullable<ReturnType<typeof useTaste>>} taste
+ */
+export function matchScore(movie, taste) {
+  const ids = movie.genres.map((g) => g.id);
+  const fit = ids.reduce((sum, id) => sum + (taste.weights.get(id) ?? 0), 0) / Math.sqrt(Math.max(1, ids.length));
+  const clashes = ids.filter((id) => taste.disliked.has(id)).length;
+  return {
+    score: fit - 2 * clashes,
+    good: clashes === 0 && ids.some((id) => taste.top.has(id)) && fit >= 2,
+  };
 }
 
 /** Ask for a fresh set, bypassing the server cache. */

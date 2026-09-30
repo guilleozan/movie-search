@@ -136,7 +136,7 @@ function Step({ title, hint, children }) {
   );
 }
 
-function Chip({ active, onClick, children }) {
+export function Chip({ active, onClick, children }) {
   return (
     <button
       type="button"

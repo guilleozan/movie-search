@@ -17,7 +17,7 @@ const COUNT = 12;
 const MAX_CANDIDATES = 80;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const MAX_SETS_PER_HOUR = 20;
-const CACHE_VERSION = 1; // bump when the output format changes, to skip old cached sets
+const CACHE_VERSION = 2; // bump when the output format changes, to skip old cached sets
 
 const CONTEXTS: Record<string, string> = {
   home: 'They are watching at home tonight.',
@@ -136,6 +136,8 @@ async function collectCandidates(opts: {
   const add = (movies: MovieSummary[], source: string, because: string | null = null) => {
     for (const movie of movies) {
       if (excluded.has(movie.id) || !movie.poster_path) continue;
+      // Shorts show up in cinema listings (festival programmes); skip them when the runtime is known.
+      if (movie.runtime !== null && movie.runtime < 40) continue;
       // Skip obscure and unreleased titles, except for what's in cinemas now.
       if (!inCinemas && (movie.vote_count < 50 || !movie.release_date || movie.release_date > today)) continue;
       const existing = pool.get(movie.id);
@@ -205,8 +207,10 @@ async function collectCandidates(opts: {
     const genres = c.movie.genres;
     const fit = genres.reduce((sum, g) => sum + (weights.get(g.id) ?? 0), 0) / Math.sqrt(Math.max(1, genres.length));
     const clash = genres.filter((g) => disliked.has(g.id)).length;
+    // Pull ratings from few votes towards 6.5, so a 10/10 from 3 votes doesn't win.
+    const rating = (c.movie.vote_average * c.movie.vote_count + 6.5 * 50) / (c.movie.vote_count + 50);
     c.score = fit + 1.5 * (c.sources.size - 1) + (c.because ? 1.5 : 0) +
-      0.6 * c.movie.vote_average + 0.3 * Math.log10(c.movie.vote_count + 1) - 2 * clash -
+      0.6 * rating + 0.3 * Math.log10(c.movie.vote_count + 1) - 2 * clash -
       (outsideEra(c.movie.release_date) ? 3 : 0);
   }
   return [...pool.values()].sort((a, b) => b.score - a.score).slice(0, MAX_CANDIDATES);

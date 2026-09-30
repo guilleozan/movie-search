@@ -6,12 +6,16 @@ import { useAuth } from '@/lib/AuthContext';
 import { useProfile } from '@/hooks/use-profile';
 import Footer from '@/components/Footer';
 import SearchDialog from '@/features/movies/SearchDialog';
+import MobileTopBar from '@/components/MobileTopBar';
 
 const navItems = [
   { to: '/', label: 'Discover', icon: Compass, end: true },
   { to: '/now-showing', label: 'Now Showing', icon: Ticket, end: false },
   { to: '/watchlist', label: 'Watchlist', icon: Bookmark, end: false },
 ];
+
+// On mobile, Profile joins the tab bar (sign out lives on the profile page).
+const mobileNavItems = [...navItems, { to: '/profile', label: 'Profile', icon: UserRound, end: false }];
 
 export default function Layout() {
   const { user, signOut } = useAuth();
@@ -102,56 +106,38 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Mobile top bar: icon-only nav below 640px so it fits at 375px */}
-      <div className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between gap-2 px-4 h-14 border-b border-white/5 bg-slate-950/90 backdrop-blur">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-400 text-slate-950">
-            <Clapperboard className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="font-display text-base font-semibold tracking-tight">CineMatch</span>
-        </Link>
-        <nav className="flex items-center gap-0.5 sm:gap-1" aria-label="Main">
-          <button
-            onClick={() => setSearchOpen(true)}
-            aria-label="Search movies"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:text-slate-100"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </button>
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              aria-label={item.label}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-1.5 rounded-lg p-2 sm:px-3 sm:py-1.5 text-xs font-medium transition-colors',
-                  isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-100'
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">{item.label}</span>
-            </NavLink>
-          ))}
-          {/* Sign out lives on the profile page on mobile, to keep the bar at 375px. */}
-          <NavLink
-            to="/profile"
-            aria-label="Profile"
-            className={({ isActive }) =>
-              cn('rounded-lg p-2 transition-colors', isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-100')
-            }
-          >
-            <UserRound className="h-4 w-4" aria-hidden="true" />
-          </NavLink>
-        </nav>
-      </div>
+      <MobileTopBar />
 
-      <main className="flex min-h-screen flex-1 min-w-0 flex-col pt-14 md:pt-0">
+      <main className="flex min-h-screen flex-1 min-w-0 flex-col pt-14 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pt-0 md:pb-0">
         <Outlet />
         <Footer />
       </main>
+
+      {/* Mobile tab bar, always visible. */}
+      <nav
+        aria-label="Main"
+        className="md:hidden fixed inset-x-0 bottom-0 z-40 border-t border-white/5 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      >
+        <ul className="grid h-16 grid-cols-4">
+          {mobileNavItems.map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  cn(
+                    'flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors',
+                    isActive ? 'text-amber-300' : 'text-slate-400 hover:text-slate-100'
+                  )
+                }
+              >
+                <item.icon className="h-5 w-5" aria-hidden="true" />
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>

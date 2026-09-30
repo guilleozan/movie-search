@@ -12,6 +12,7 @@ import { countryName } from '@/lib/tmdb';
 import { useCountry, useMovies } from '@/features/movies/hooks';
 import LocationPicker from '@/features/cinemas/LocationPicker';
 import Quiz from '@/features/recommendations/Quiz';
+import TasteEditor from '@/features/recommendations/TasteEditor';
 import { ERAS, GENRES, MOODS } from '@/features/recommendations/quiz-options';
 import { useQuizAnswers, useSaveQuizAnswers } from '@/features/recommendations/hooks';
 
@@ -200,13 +201,10 @@ function TasteSection() {
 
       {quiz.isSuccess && editing && (
         <div className="mt-6">
-          <Quiz initialAnswers={answers} onSubmit={onSubmit} submitting={save.isPending} submitLabel="Save taste" />
-          {answers && (
-            <div className="mt-3 text-center">
-              <button type="button" onClick={() => setEditing(false)} className="text-sm text-slate-400 hover:text-slate-100">
-                Cancel
-              </button>
-            </div>
+          {answers ? (
+            <TasteEditor initialAnswers={answers} onSaved={() => setEditing(false)} onCancel={() => setEditing(false)} />
+          ) : (
+            <Quiz onSubmit={onSubmit} submitting={save.isPending} submitLabel="Save taste" />
           )}
         </div>
       )}
